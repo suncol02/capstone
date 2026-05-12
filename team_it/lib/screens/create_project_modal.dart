@@ -9,12 +9,12 @@ class CreateProjectModal extends StatefulWidget {
 
 class _CreateProjectModalState extends State<CreateProjectModal> {
   final TextEditingController projectNameController = TextEditingController();
-  final TextEditingController recruitCountController = TextEditingController();
   final TextEditingController requirementController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
 
   String? selectedType;
   List<String> selectedRequirements = [];
+  int recruitCount = 1;
 
   final List<String> availableRequirements = [
     'Figma',
@@ -44,7 +44,6 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   void _postProject() {
     if (selectedType == null ||
         projectNameController.text.isEmpty ||
-        recruitCountController.text.isEmpty ||
         descriptionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('필수 항목을 모두 입력해주세요.')),
@@ -52,14 +51,13 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       return;
     }
 
-    print('프로젝트 생성: $selectedType, ${projectNameController.text}');
+    print('프로젝트 생성: $selectedType, ${projectNameController.text}, 인원: $recruitCount');
     Navigator.pop(context);
   }
 
   @override
   void dispose() {
     projectNameController.dispose();
-    recruitCountController.dispose();
     requirementController.dispose();
     descriptionController.dispose();
     super.dispose();
@@ -111,14 +109,26 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
 
               const Text('모집 인원', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 8),
-              TextField(
-                controller: recruitCountController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: '인원 수를 입력해주세요',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                ),
+              Column(
+                children: [
+                  Slider(
+                    value: recruitCount.toDouble(),
+                    onChanged: (value) {
+                      setState(() {
+                        recruitCount = value.toInt();
+                      });
+                    },
+                    min: 1,
+                    max: 10,
+                    divisions: 9,
+                    label: '$recruitCount명',
+                    activeColor: Colors.indigo,
+                  ),
+                  Text(
+                    '최대 인원: $recruitCount명',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
