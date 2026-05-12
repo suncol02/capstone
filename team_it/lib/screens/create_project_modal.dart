@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CreateProjectModal extends StatefulWidget {
-  const CreateProjectModal({super.key});
+  final VoidCallback onProjectCreated;
+  
+  const CreateProjectModal({super.key, required this.onProjectCreated});
 
   @override
   State<CreateProjectModal> createState() => _CreateProjectModalState();
@@ -15,6 +20,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
   String? selectedType;
   List<String> selectedRequirements = [];
   int recruitCount = 1;
+  bool _isLoading = false;
 
   final List<String> availableRequirements = [
     'Figma',
@@ -41,7 +47,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
     });
   }
 
-  void _postProject() {
+  void _postProject() async {
     if (selectedType == null ||
         projectNameController.text.isEmpty ||
         descriptionController.text.isEmpty) {
@@ -51,8 +57,60 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
       return;
     }
 
-    print('프로젝트 생성: $selectedType, ${projectNameController.text}, 인원: $recruitCount');
-    Navigator.pop(context);
+    setState(() => _isLoading = true);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      if (token == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('로그인이 필요합니다.')),
+          );
+        }
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('http://team-it.iptime.org:8000/api/projects/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Token $token',
+        },
+        body: jsonEncode({
+          'name': projectNameController.text,
+          'category': selectedType,
+          'recruit_count': recruitCount,
+          'requirements': selectedRequirements.join(','),
+          'description': descriptionController.text,
+        }),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('프로젝트가 생성되었습니다!')),
+        );
+        widget.onProjectCreated();
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('프로젝트 생성 실패 (${response.statusCode})')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('오류: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -111,18 +169,26 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
               const SizedBox(height: 8),
               Column(
                 children: [
-                  Slider(
-                    value: recruitCount.toDouble(),
-                    onChanged: (value) {
-                      setState(() {
-                        recruitCount = value.toInt();
-                      });
-                    },
-                    min: 1,
-                    max: 10,
-                    divisions: 9,
-                    label: '$recruitCount명',
-                    activeColor: Colors.indigo,
+                  Row(
+                    children: [
+                      const Text('1', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
+                      Expanded(
+                        child: Slider(
+                          value: recruitCount.toDouble(),
+                          onChanged: (value) {
+                            setState(() {
+                              recruitCount = value.toInt();
+                            });
+                          },
+                          min: 1,
+                          max: 10,
+                          divisions: 9,
+                          label: '$recruitCount명',
+                          activeColor: Colors.indigo,
+                        ),
+                      ),
+                      const Text('10', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
+                    ],
                   ),
                   Text(
                     '최대 인원: $recruitCount명',
@@ -196,7 +262,7 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _isLoading ? null : () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         side: const BorderSide(color: Colors.grey),
@@ -207,13 +273,22 @@ class _CreateProjectModalState extends State<CreateProjectModal> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _postProject,
+                      onPressed: _isLoading ? null : _postProject,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.indigo,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: const Text('게시하기'),
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text('게시하기'),
                     ),
                   ),
                 ],

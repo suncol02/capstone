@@ -27,6 +27,12 @@ class _MainScreenState extends State<MainScreen> {
     const Center(child: Text('내 정보 / 프로필 화면 (준비 중)')),
   ];
 
+  void _refreshProjects() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   // 로그아웃 함수
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
@@ -80,12 +86,13 @@ class _MainScreenState extends State<MainScreen> {
 
       // 팀원 모집 글쓰기 버튼
       floatingActionButton: _selectedIndex != 2
-          // '내 정보' 탭에서는 안 보이게 설정 가능
           ? FloatingActionButton(
               onPressed: () {
                 showDialog(
                   context: context,
-                  builder: (context) => const CreateProjectModal(),
+                  builder: (context) => CreateProjectModal(
+                    onProjectCreated: _refreshProjects,
+                  ),
                 );
               },
               backgroundColor: Colors.blue,
