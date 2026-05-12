@@ -18,7 +18,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     // 프로젝트 ID 기반 채팅방 연결
-    channel = WebSocketChannel.connect(Uri.parse("ws://127.0.0.1:8000/ws/chat/${widget.projectId}/"));
+    channel = WebSocketChannel.connect(Uri.parse("ws://team-it.iptime.org/ws/chat/${widget.projectId}/"));
 
     channel.stream.listen((message) {
       setState(() {

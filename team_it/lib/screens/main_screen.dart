@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'login_screen.dart';
 
 // API 기본 URL (백엔드 서버 주소로 변경 필요)
-const String API_BASE_URL = 'http://127.0.0.1:8000/api';
+const String API_BASE_URL = 'http://team-it.iptime.org/api';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

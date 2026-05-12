@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:team_it/screens/first_screen.dart'; //첫 화면 불러오기
+//첫 화면 불러오기
 import 'package:team_it/screens/login_screen.dart'; //로그인 화면 불러오기
-import 'package:team_it/screens/register_screen.dart'; //회원가입 화면 불러오기
+//회원가입 화면 불러오기
 import 'package:team_it/screens/main_screen.dart'; //메인화면 불러오기
-import 'package:team_it/widgets/password_field.dart';
 
 void main() {
   runApp(const MainApp());

@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       // 로컬 Django 서버 URL
-      final String serverUrl = 'http://127.0.0.1:8000/accounts/login/';
+      final String serverUrl = 'http://team-it.iptime.org/accounts/login/';
       final Map<String, String> requestBody = {'id': id, 'password': password};
 
       print('[DEBUG] 요청 URL: $serverUrl');
