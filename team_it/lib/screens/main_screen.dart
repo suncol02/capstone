@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'login_screen.dart';
+import 'create_project_modal.dart';
 
 // API 기본 URL (백엔드 서버 주소로 변경 필요)
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
@@ -81,7 +82,12 @@ class _MainScreenState extends State<MainScreen> {
       floatingActionButton: _selectedIndex != 2
           // '내 정보' 탭에서는 안 보이게 설정 가능
           ? FloatingActionButton(
-              onPressed: () => print('글쓰기 버튼 클릭'),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const CreateProjectModal(),
+                );
+              },
               backgroundColor: Colors.blue,
               child: const Icon(Icons.add, color: Colors.white),
             )
