@@ -47,7 +47,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final uri = Uri.parse('http://127.0.0.1:8000/accounts/signup/');
+      final uri = Uri.parse('http://team-it.iptime.org:8000/accounts/signup/');
       final response = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},

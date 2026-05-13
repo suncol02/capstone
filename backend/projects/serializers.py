@@ -82,23 +82,81 @@ class ProjectSerializer(serializers.ModelSerializer):
     """프로젝트 직렬화"""
     owner = UserSimpleSerializer(read_only=True)
     chat_rooms = ChatRoomListSerializer(many=True, read_only=True)
+    name = serializers.CharField(source='title', read_only=True)  # title을 name으로 매핑
+    requirements_list = serializers.SerializerMethodField()
     
     class Meta:
         model = Project
-        fields = ['id', 'name', 'description', 'owner', 'chat_rooms', 'created_at', 'updated_at']
+        fields = [
+            'id', 'title', 'name', 'description', 'category', 'owner', 
+            'status', 'recruit_count', 'requirements', 'requirements_list',
+            'chat_rooms', 'created_at', 'updated_at'
+        ]
         read_only_fields = ['owner', 'created_at', 'updated_at']
+    
+    def get_requirements_list(self, obj):
+        """요구사항을 리스트로 반환"""
+        if obj.requirements:
+            return [req.strip() for req in obj.requirements.split(',')]
+        return []
 
 
 class ProjectListSerializer(serializers.ModelSerializer):
     """프로젝트 목록용 직렬화"""
     owner = UserSimpleSerializer(read_only=True)
     chat_room_count = serializers.SerializerMethodField()
+    name = serializers.CharField(source='title', read_only=True)  # title을 name으로 매핑
+    requirements_list = serializers.SerializerMethodField()
     
     class Meta:
         model = Project
-        fields = ['id', 'name', 'description', 'owner', 'chat_room_count', 'created_at', 'updated_at']
+        fields = [
+            'id', 'title', 'name', 'description', 'category', 'owner', 
+            'status', 'recruit_count', 'requirements', 'requirements_list',
+            'chat_room_count', 'created_at', 'updated_at'
+        ]
         read_only_fields = ['owner', 'created_at', 'updated_at']
     
     def get_chat_room_count(self, obj):
-        """프로젝트의 채팅방 수 반환"""
+        """채팅방 수 반환"""
         return obj.chat_rooms.count()
+    
+    def get_requirements_list(self, obj):
+        """요구사항을 리스트로 반환"""
+        if obj.requirements:
+            return [req.strip() for req in obj.requirements.split(',')]
+        return []
+
+
+class ProjectCreateSerializer(serializers.ModelSerializer):
+    """프로젝트 생성용 직렬화
+    
+    Flutter 클라이언트에서 'name'으로 받은 데이터를 'title'로 변환합니다.
+    """
+    name = serializers.CharField(write_only=True, required=True)  # name으로 입력받음
+    requirements = serializers.ListField(
+        child=serializers.CharField(),
+        write_only=True,
+        required=False
+    )
+    
+    class Meta:
+        model = Project
+        fields = [
+            'name', 'description', 'category', 'recruit_count', 'requirements'
+        ]
+    
+    def create(self, validated_data):
+        """프로젝트 생성"""
+        name = validated_data.pop('name')
+        requirements_list = validated_data.pop('requirements', [])
+        
+        # requirements 리스트를 쉼표로 구분된 문자열로 변환
+        requirements_str = ', '.join(requirements_list) if requirements_list else ''
+        
+        project = Project.objects.create(
+            title=name,
+            requirements=requirements_str,
+            **validated_data
+        )
+        return project

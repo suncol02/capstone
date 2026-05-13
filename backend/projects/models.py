@@ -16,14 +16,16 @@ class Project(models.Model):
     Attributes:
         title (CharField): 프로젝트 제목
         description (TextField): 프로젝트 설명
-        category (CharField): 프로젝트 카테고리 (수업/대외활동)
+        category (CharField): 프로젝트 카테고리 (팀플/대외활동)
         owner (ForeignKey): 프로젝트 생성자 (User)
         status (CharField): 프로젝트 상태
+        recruit_count (IntegerField): 모집 인원
+        requirements (TextField): 요구사항 (쉼표로 구분)
         created_at (DateTimeField): 프로젝트 생성 시간
         updated_at (DateTimeField): 프로젝트 수정 시간
     """
     CATEGORY_CHOICES = [
-        ('수업', '수업'),
+        ('팀플', '팀플'),
         ('대외활동', '대외활동'),
     ]
     STATUS_CHOICES = [
@@ -48,7 +50,7 @@ class Project(models.Model):
     category = models.CharField(
         max_length=20,
         choices=CATEGORY_CHOICES,
-        default='수업',
+        default='팀플',
         help_text="프로젝트 카테고리"
     )
     
@@ -66,6 +68,18 @@ class Project(models.Model):
         choices=STATUS_CHOICES,
         default='모집중',
         help_text="프로젝트 진행 상태"
+    )
+    
+    # 모집 인원
+    recruit_count = models.IntegerField(
+        default=1,
+        help_text="모집하는 인원 수"
+    )
+    
+    # 요구사항 (쉼표로 구분된 문자열)
+    requirements = models.TextField(
+        blank=True,
+        help_text="프로젝트에 필요한 기술/역할 (쉼표로 구분)"
     )
     
     # 생성 시간 (자동으로 현재 시간 설정)
@@ -86,7 +100,7 @@ class Project(models.Model):
         Returns:
             str: 프로젝트 이름
         """
-        return self.name
+        return self.title
 
 
 class ChatRoom(models.Model):

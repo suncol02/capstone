@@ -9,9 +9,10 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from .models import Project, ChatRoom, Message
 from .serializers import (
-    ProjectSerializer, ProjectListSerializer,
+    ProjectSerializer, ProjectListSerializer, ProjectCreateSerializer,
     ChatRoomSerializer, ChatRoomListSerializer,
     MessageSerializer
 )
@@ -25,19 +26,46 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """사용자가 속한 프로젝트 반환"""
-        # TODO: 추후 팀 멤버 관계 추가시 수정
-        return Project.objects.filter(owner=self.request.user)
+        """사용자가 생성한 프로젝트 또는 모든 프로젝트 반환
+        
+        'my' 파라미터가 있으면 사용자가 생성한 프로젝트만 반환
+        """
+        if self.request.query_params.get('my') == 'true':
+            return Project.objects.filter(owner=self.request.user).order_by('-created_at')
+        return Project.objects.all().order_by('-created_at')
     
     def get_serializer_class(self):
         """요청에 따라 적절한 Serializer 선택"""
         if self.action == 'list':
             return ProjectListSerializer
+        elif self.action == 'create':
+            return ProjectCreateSerializer
         return ProjectSerializer
     
     def perform_create(self, serializer):
         """프로젝트 생성시 현재 사용자를 owner로 설정"""
         serializer.save(owner=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def by_category(self, request):
+        """카테고리별로 프로젝트 조회
+        
+        쿼리 파라미터: category (팀플, 대외활동)
+        """
+        category = request.query_params.get('category')
+        
+        if not category:
+            return Response(
+                {'error': 'category 파라미터는 필수입니다.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        projects = Project.objects.filter(
+            category=category
+        ).order_by('-created_at')
+        
+        serializer = self.get_serializer(projects, many=True)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
     def create_chat_room(self, request, pk=None):
