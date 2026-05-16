@@ -19,18 +19,22 @@ class _MainScreenState extends State<MainScreen> {
   // 현재 선택된 하단 탭 인덱스
   int _selectedIndex = 0;
 
-  // 각 탭에 대응하는 화면 리스트
-  final List<Widget> _screens = [
-    const ProjectList(category: '수업팀플'),
-    const ProjectList(category: '대외활동'),
-    const ProjectList(category: '알림'),
-    const Center(child: Text('내 정보 / 프로필 화면 (준비 중)')),
-  ];
+  // ProjectList의 상태에 접근하기 위한 GlobalKey
+  final GlobalKey<_ProjectListState> _projectListKey1 = GlobalKey();
+  final GlobalKey<_ProjectListState> _projectListKey2 = GlobalKey();
 
-  void _refreshProjects() {
-    if (mounted) {
-      setState(() {});
-    }
+  // 각 탭에 대응하는 화면 리스트
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      ProjectList(key: _projectListKey1, category: '팀플'),
+      ProjectList(key: _projectListKey2, category: '대외활동'),
+      const ProjectList(category: '알림'),
+      const Center(child: Text('내 정보 / 프로필 화면 (준비 중)')),
+    ];
   }
 
   // 로그아웃 함수
@@ -41,6 +45,15 @@ class _MainScreenState extends State<MainScreen> {
 
     if (mounted) {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+    }
+  }
+
+  void _refreshProjectList() {
+    // 현재 선택된 탭에 따라 해당하는 ProjectList 새로고침
+    if (_selectedIndex == 0) {
+      _projectListKey1.currentState?._loadProjects();
+    } else if (_selectedIndex == 1) {
+      _projectListKey2.currentState?._loadProjects();
     }
   }
 
@@ -77,7 +90,7 @@ class _MainScreenState extends State<MainScreen> {
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed, // 아이콘 고정
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: '수업팀플'),
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: '팀플'),
           BottomNavigationBarItem(icon: Icon(Icons.group_work), label: '대외활동'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
           BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '알림'),
@@ -85,14 +98,12 @@ class _MainScreenState extends State<MainScreen> {
       ),
 
       // 팀원 모집 글쓰기 버튼
-      floatingActionButton: _selectedIndex != 2
+      floatingActionButton: _selectedIndex < 2
           ? FloatingActionButton(
               onPressed: () {
                 showDialog(
                   context: context,
-                  builder: (context) => CreateProjectModal(
-                    onProjectCreated: _refreshProjects,
-                  ),
+                  builder: (context) => CreateProjectModal(onProjectCreated: _refreshProjectList),
                 );
               },
               backgroundColor: Colors.blue,
@@ -125,6 +136,15 @@ class _ProjectListState extends State<ProjectList> {
 
   Future<void> _loadProjects() async {
     try {
+      // 알림 탭인 경우 특수 처리
+      if (widget.category == '알림') {
+        setState(() {
+          _isLoading = false;
+          _projects = [];
+        });
+        return;
+      }
+
       // SharedPreferences에서 토큰 조회
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('auth_token');
@@ -137,33 +157,46 @@ class _ProjectListState extends State<ProjectList> {
         return;
       }
 
+      // 카테고리별 필터링 URL
+      final uri = Uri.parse('$API_BASE_URL/projects/by_category/?category=${widget.category}');
+
       final response = await http.get(
-        Uri.parse('$API_BASE_URL/projects/'),
+        uri,
         headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
       );
 
+      print('[DEBUG] 카테고리: ${widget.category}, 상태 코드: ${response.statusCode}');
+      print('[DEBUG] 응답: ${response.body}');
+
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _projects = data;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _projects = data;
+            _isLoading = false;
+          });
+        }
       } else if (response.statusCode == 401) {
         // 인증 실패 - 로그인 화면으로 이동
         if (mounted) {
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
         }
       } else {
+        if (mounted) {
+          setState(() {
+            _error = '프로젝트 로드 실패 (${response.statusCode})';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('[DEBUG] 예외 발생: $e');
+      if (mounted) {
         setState(() {
-          _error = '프로젝트 로드 실패 (${response.statusCode})';
+          _error = '오류: $e';
           _isLoading = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _error = '오류: $e';
-        _isLoading = false;
-      });
     }
   }
 
