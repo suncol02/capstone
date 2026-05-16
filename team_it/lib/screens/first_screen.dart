@@ -3,7 +3,7 @@ import 'login_screen.dart';
 import 'register_screen.dart';
 
 class FirstScreen extends StatelessWidget {
-  const FirstScreen({Key? key}) : super(key: key);
+  const FirstScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
