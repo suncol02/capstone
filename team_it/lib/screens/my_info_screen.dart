@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'archive_screen.dart';
 
 class MyInfoScreen extends StatefulWidget {
   const MyInfoScreen({super.key});
@@ -53,11 +52,6 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 24),
-          const Text(
-            '내 정보',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -91,47 +85,6 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
                           ],
                         ),
                       ),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ArchiveScreen(completedProjects: _completedProjects),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade700,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.orange.shade400.withOpacity(0.4),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const Text(
-                                '완료 프로젝트',
-                                style: TextStyle(fontSize: 12, color: Colors.white),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '$_completedProjects',
-                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                              const SizedBox(height: 6),
-                              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -140,6 +93,41 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
                       const Icon(Icons.email, color: Colors.blue),
                       const SizedBox(width: 8),
                       Expanded(child: Text('이메일: $_email')),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '완료 프로젝트',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: (_completedProjects / 10).clamp(0.0, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade600,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '$_completedProjects개',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'login_screen.dart';
 import 'create_project_modal.dart';
+import 'my_info_screen.dart';
 
 // API 기본 URL (백엔드 서버 주소로 변경 필요)
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
@@ -32,8 +33,8 @@ class _MainScreenState extends State<MainScreen> {
     _screens = [
       ProjectList(key: _projectListKey1, category: '팀플'),
       ProjectList(key: _projectListKey2, category: '대외활동'),
+      const MyInfoScreen(),
       const ProjectList(category: '알림'),
-      const Center(child: Text('내 정보 / 프로필 화면 (준비 중)')),
     ];
   }
 
@@ -126,7 +127,10 @@ class ProjectList extends StatefulWidget {
 class _ProjectListState extends State<ProjectList> {
   bool _isLoading = true;
   List<dynamic> _projects = [];
+  List<dynamic> _filteredProjects = [];
   String? _error;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -173,6 +177,7 @@ class _ProjectListState extends State<ProjectList> {
         if (mounted) {
           setState(() {
             _projects = data;
+            _filteredProjects = data;
             _isLoading = false;
           });
         }
@@ -198,6 +203,24 @@ class _ProjectListState extends State<ProjectList> {
         });
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterProjects(String query) {
+    final lowerQuery = query.toLowerCase();
+    setState(() {
+      _searchQuery = query;
+      _filteredProjects = _projects.where((project) {
+        final title = '${project['name'] ?? ''}'.toLowerCase();
+        final description = '${project['description'] ?? ''}'.toLowerCase();
+        return title.contains(lowerQuery) || description.contains(lowerQuery);
+      }).toList();
+    });
   }
 
   @override
@@ -232,36 +255,155 @@ class _ProjectListState extends State<ProjectList> {
       return const Center(child: Text('프로젝트가 없습니다.'));
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _projects.length,
-      itemBuilder: (context, index) {
-        final project = _projects[index];
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _filterProjects,
+            decoration: InputDecoration(
+              hintText: '프로젝트 검색',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _filteredProjects.isEmpty
+              ? const Center(child: Text('검색 결과가 없습니다.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  itemCount: _filteredProjects.length,
+                  itemBuilder: (context, index) {
+              final project = _filteredProjects[index];
+        final int maxCount = project['recruit_count'] is int
+            ? project['recruit_count']
+            : int.tryParse('${project['recruit_count']}') ?? 3;
+        final int currentCount = project['current_participants'] is int
+            ? project['current_participants']
+            : project['current_members'] is int
+                ? project['current_members']
+                : project['member_count'] is int
+                    ? project['member_count']
+                    : int.tryParse('${project['current_participants'] ?? project['current_members'] ?? project['member_count']}') ?? 1;
+        final double progress = maxCount > 0 ? (currentCount / maxCount).clamp(0.0, 1.0) : 0.0;
+        final bool isOpen = currentCount < maxCount;
+        final List<String> requirements = (project['requirements'] is List)
+            ? (project['requirements'] as List).map((e) => e.toString()).toList()
+            : project['requirements'] is String
+                ? project['requirements'].toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList()
+                : <String>[];
+
         return Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           margin: const EdgeInsets.only(bottom: 16),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              backgroundColor: Colors.blue.shade100,
-              child: Text('${index + 1}', style: const TextStyle(color: Colors.blue)),
-            ),
-            title: Text(project['name'] ?? '제목 없음', style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(project['description'] ?? '설명 없음', maxLines: 2, overflow: TextOverflow.ellipsis),
-              ],
-            ),
-            trailing: const Icon(Icons.chevron_right),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
             onTap: () {
               Navigator.push(context, MaterialPageRoute(builder: (context) => ProjectDetailScreen(project: project)));
             },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          project['name'] ?? '제목 없음',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isOpen ? Colors.green.shade100 : Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          isOpen ? '모집중' : '모집마감',
+                          style: TextStyle(
+                            color: isOpen ? Colors.green.shade800 : Colors.grey.shade700,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.person, size: 18, color: Colors.black87),
+                      const SizedBox(width: 6),
+                      Text(
+                        '$currentCount/$maxCount명',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 8,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation(isOpen ? Colors.blue : Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (requirements.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: requirements
+                          .map(
+                            (req) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(req, style: const TextStyle(fontSize: 12, color: Colors.blue)),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  if (requirements.isNotEmpty) const SizedBox(height: 12),
+                  Text(
+                    project['description'] ?? '설명 없음',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'View Details',
+                      style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
+                ),
+        ),
+      ],
     );
   }
 }
@@ -277,11 +419,46 @@ class ProjectDetailScreen extends StatefulWidget {
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
+  int _parseInt(dynamic value, {required int defaultValue}) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
+  List<String> _parseRequirements(dynamic value) {
+    if (value is List) {
+      return value.map((e) => e.toString()).toList();
+    }
+    if (value is String) {
+      return value
+          .split(',')
+          .map((text) => text.trim())
+          .where((text) => text.isNotEmpty)
+          .toList();
+    }
+    return <String>[];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final project = widget.project;
+    final String title = project['name'] ?? '제목 없음';
+    final String description = project['description'] ?? '설명이 없습니다';
+    final int maxCount = _parseInt(project['recruit_count'], defaultValue: 3);
+    final int currentCount = project['current_participants'] is int
+        ? project['current_participants']
+        : project['current_members'] is int
+            ? project['current_members']
+            : project['member_count'] is int
+                ? project['member_count']
+                : _parseInt(project['current_participants'] ?? project['current_members'] ?? project['member_count'], defaultValue: 1);
+    final double progress = maxCount > 0 ? (currentCount / maxCount).clamp(0.0, 1.0) : 0.0;
+    final bool isOpen = currentCount < maxCount;
+    final List<String> requirements = _parseRequirements(project['requirements']);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.project['name'] ?? 'Project'),
+        title: Text(title),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -289,21 +466,98 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 프로젝트 정보
           Card(
             elevation: 1,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    widget.project['name'] ?? '제목 없음',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isOpen ? Colors.green.shade100 : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      isOpen ? '모집중' : '모집마감',
+                      style: TextStyle(
+                        color: isOpen ? Colors.green.shade800 : Colors.grey.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      const Icon(Icons.person, size: 18, color: Colors.black54),
+                      const SizedBox(width: 8),
+                      Text('$currentCount/$maxCount명', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 10,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation(isOpen ? Colors.blue : Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  if (requirements.isNotEmpty) ...[
+                    const Text('Required Skills', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: requirements
+                          .map(
+                            (req) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(req, style: const TextStyle(color: Colors.blue, fontSize: 12)),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+                  const Text('Description', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const SizedBox(height: 8),
-                  Text(widget.project['description'] ?? '설명이 없습니다', style: TextStyle(color: Colors.grey[600])),
+                  Text(description, style: TextStyle(color: Colors.grey.shade800, height: 1.5)),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '지금 바로 신청하고 참여를 시작하세요.',
+                    style: TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('신청하기 기능은 준비 중입니다.')));
+                      },
+                      icon: const Icon(Icons.send, size: 20),
+                      label: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 14),
+                        child: Text('신청하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple.shade600,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 4,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
