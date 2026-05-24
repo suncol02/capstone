@@ -95,6 +95,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.group_work), label: '대외활동'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
           BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '알림'),
+          //BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '아카이브'),
         ],
       ),
 
@@ -267,10 +268,7 @@ class _ProjectListState extends State<ProjectList> {
               prefixIcon: const Icon(Icons.search),
               filled: true,
               fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-                borderSide: BorderSide.none,
-              ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
             ),
           ),
@@ -282,125 +280,136 @@ class _ProjectListState extends State<ProjectList> {
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   itemCount: _filteredProjects.length,
                   itemBuilder: (context, index) {
-              final project = _filteredProjects[index];
-        final int maxCount = project['recruit_count'] is int
-            ? project['recruit_count']
-            : int.tryParse('${project['recruit_count']}') ?? 3;
-        final int currentCount = project['current_participants'] is int
-            ? project['current_participants']
-            : project['current_members'] is int
-                ? project['current_members']
-                : project['member_count'] is int
-                    ? project['member_count']
-                    : int.tryParse('${project['current_participants'] ?? project['current_members'] ?? project['member_count']}') ?? 1;
-        final double progress = maxCount > 0 ? (currentCount / maxCount).clamp(0.0, 1.0) : 0.0;
-        final bool isOpen = currentCount < maxCount;
-        final List<String> requirements = (project['requirements'] is List)
-            ? (project['requirements'] as List).map((e) => e.toString()).toList()
-            : project['requirements'] is String
-                ? project['requirements'].toString().split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList()
-                : <String>[];
+                    final project = _filteredProjects[index];
+                    final int maxCount = project['recruit_count'] is int
+                        ? project['recruit_count']
+                        : int.tryParse('${project['recruit_count']}') ?? 3;
+                    final int currentCount = project['current_participants'] is int
+                        ? project['current_participants']
+                        : project['current_members'] is int
+                        ? project['current_members']
+                        : project['member_count'] is int
+                        ? project['member_count']
+                        : int.tryParse(
+                                '${project['current_participants'] ?? project['current_members'] ?? project['member_count']}',
+                              ) ??
+                              1;
+                    final double progress = maxCount > 0 ? (currentCount / maxCount).clamp(0.0, 1.0) : 0.0;
+                    final bool isOpen = currentCount < maxCount;
+                    final List<String> requirements = (project['requirements'] is List)
+                        ? (project['requirements'] as List).map((e) => e.toString()).toList()
+                        : project['requirements'] is String
+                        ? project['requirements']
+                              .toString()
+                              .split(',')
+                              .map((e) => e.trim())
+                              .where((e) => e.isNotEmpty)
+                              .toList()
+                        : <String>[];
 
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          margin: const EdgeInsets.only(bottom: 16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => ProjectDetailScreen(project: project)));
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          project['name'] ?? '제목 없음',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isOpen ? Colors.green.shade100 : Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          isOpen ? '모집중' : '모집마감',
-                          style: TextStyle(
-                            color: isOpen ? Colors.green.shade800 : Colors.grey.shade700,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                    return Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => ProjectDetailScreen(project: project)),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      project['name'] ?? '제목 없음',
+                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isOpen ? Colors.green.shade100 : Colors.grey.shade200,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      isOpen ? '모집중' : '모집마감',
+                                      style: TextStyle(
+                                        color: isOpen ? Colors.green.shade800 : Colors.grey.shade700,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  const Icon(Icons.person, size: 18, color: Colors.black87),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '$currentCount/$maxCount명',
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                  value: progress,
+                                  minHeight: 8,
+                                  backgroundColor: Colors.grey.shade200,
+                                  valueColor: AlwaysStoppedAnimation(isOpen ? Colors.blue : Colors.grey),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              if (requirements.isNotEmpty)
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: requirements
+                                      .map(
+                                        (req) => Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade50,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(req, style: const TextStyle(fontSize: 12, color: Colors.blue)),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              if (requirements.isNotEmpty) const SizedBox(height: 12),
+                              Text(
+                                project['description'] ?? '설명 없음',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(color: Colors.grey.shade700),
+                              ),
+                              const SizedBox(height: 16),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  'View Details',
+                                  style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.person, size: 18, color: Colors.black87),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$currentCount/$maxCount명',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 8,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation(isOpen ? Colors.blue : Colors.grey),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (requirements.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: requirements
-                          .map(
-                            (req) => Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(req, style: const TextStyle(fontSize: 12, color: Colors.blue)),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  if (requirements.isNotEmpty) const SizedBox(height: 12),
-                  Text(
-                    project['description'] ?? '설명 없음',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey.shade700),
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'View Details',
-                      style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+                    );
+                  },
                 ),
         ),
       ],
@@ -430,11 +439,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       return value.map((e) => e.toString()).toList();
     }
     if (value is String) {
-      return value
-          .split(',')
-          .map((text) => text.trim())
-          .where((text) => text.isNotEmpty)
-          .toList();
+      return value.split(',').map((text) => text.trim()).where((text) => text.isNotEmpty).toList();
     }
     return <String>[];
   }
@@ -448,21 +453,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final int currentCount = project['current_participants'] is int
         ? project['current_participants']
         : project['current_members'] is int
-            ? project['current_members']
-            : project['member_count'] is int
-                ? project['member_count']
-                : _parseInt(project['current_participants'] ?? project['current_members'] ?? project['member_count'], defaultValue: 1);
+        ? project['current_members']
+        : project['member_count'] is int
+        ? project['member_count']
+        : _parseInt(
+            project['current_participants'] ?? project['current_members'] ?? project['member_count'],
+            defaultValue: 1,
+          );
     final double progress = maxCount > 0 ? (currentCount / maxCount).clamp(0.0, 1.0) : 0.0;
     final bool isOpen = currentCount < maxCount;
     final List<String> requirements = _parseRequirements(project['requirements']);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
+      appBar: AppBar(title: Text(title), backgroundColor: Colors.white, foregroundColor: Colors.black, elevation: 0),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

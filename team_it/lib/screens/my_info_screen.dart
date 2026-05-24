@@ -73,15 +73,9 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _displayName,
-                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                            ),
+                            Text(_displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
-                            Text(
-                              _major,
-                              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                            ),
+                            Text(_major, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
                           ],
                         ),
                       ),
@@ -92,14 +86,11 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
                     children: [
                       const Icon(Icons.email, color: Colors.blue),
                       const SizedBox(width: 8),
-                      Expanded(child: Text('이메일: $_email')),
+                      Expanded(child: Text('웹메일: $_email')),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    '완료 프로젝트',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  const Text('완료 프로젝트', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -124,10 +115,7 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        '$_completedProjects개',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
+                      Text('$_completedProjects개', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -139,7 +127,20 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
           const SizedBox(height: 24),
           const Text('추가 기능', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text('• 프로필 편집'),
+
+          ElevatedButton(
+            onPressed: () {
+              // 진행중인 활동 페이지로 이동하는 코드 작성하기
+            },
+            child: Text('진행중인 활동'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // 완료한 활동 페이지로 이동하는 코드 작성하기
+            },
+            child: Text('완료한 활동'),
+          ),
+          ElevatedButton(onPressed: () {}, child: Text('아카이브')),
         ],
       ),
     );
