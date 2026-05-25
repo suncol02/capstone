@@ -43,6 +43,16 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('user_email');
+
+    if (mounted) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+    }
+  }
+
   void _refreshProjectList() {
     _projectListKey.currentState?._loadProjects();
   }
@@ -60,11 +70,17 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline),
-            tooltip: '채팅',
-            onPressed: _openChat,
-          ),
+          _selectedIndex == 0
+              ? IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  tooltip: '채팅',
+                  onPressed: _openChat,
+                )
+              : IconButton(
+                  icon: const Icon(Icons.logout),
+                  tooltip: '로그아웃',
+                  onPressed: _logout,
+                ),
         ],
       ),
 
@@ -85,7 +101,7 @@ class _MainScreenState extends State<MainScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: '프로젝트'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '알림'),
+          BottomNavigationBarItem(icon: Icon(Icons.archive), label: '아카이브'),
         ],
       ),
 
