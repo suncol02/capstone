@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'login_screen.dart';
 import 'create_project_modal.dart';
 import 'my_info_screen.dart';
+import 'archive_screen.dart';
 
 // API 기본 URL (백엔드 서버 주소로 변경 필요)
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
@@ -21,8 +22,7 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
   // ProjectList의 상태에 접근하기 위한 GlobalKey
-  final GlobalKey<_ProjectListState> _projectListKey1 = GlobalKey();
-  final GlobalKey<_ProjectListState> _projectListKey2 = GlobalKey();
+  final GlobalKey<_ProjectListState> _projectListKey = GlobalKey();
 
   // 각 탭에 대응하는 화면 리스트
   late final List<Widget> _screens;
@@ -31,31 +31,20 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _screens = [
-      ProjectList(key: _projectListKey1, category: '팀플'),
-      ProjectList(key: _projectListKey2, category: '대외활동'),
+      ProjectList(key: _projectListKey, category: '전체'),
       const MyInfoScreen(),
-      const ProjectList(category: '알림'),
+      const ArchiveScreen(showAppBar: false),
     ];
   }
 
-  // 로그아웃 함수
-  Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
-    await prefs.remove('user_email');
-
-    if (mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
-    }
+  void _openChat() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('채팅은 프로젝트 상세 화면에서 이용할 수 있습니다.')),
+    );
   }
 
   void _refreshProjectList() {
-    // 현재 선택된 탭에 따라 해당하는 ProjectList 새로고침
-    if (_selectedIndex == 0) {
-      _projectListKey1.currentState?._loadProjects();
-    } else if (_selectedIndex == 1) {
-      _projectListKey2.currentState?._loadProjects();
-    }
+    _projectListKey.currentState?._loadProjects();
   }
 
   @override
@@ -71,8 +60,11 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         actions: [
-          // 로그아웃 버튼
-          IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: '채팅',
+            onPressed: _openChat,
+          ),
         ],
       ),
 
@@ -91,15 +83,14 @@ class _MainScreenState extends State<MainScreen> {
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed, // 아이콘 고정
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: '팀플'),
-          BottomNavigationBarItem(icon: Icon(Icons.group_work), label: '대외활동'),
+          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: '프로젝트'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '알림'),
+          BottomNavigationBarItem(icon: Icon(Icons.archive), label: '아카이브')
         ],
       ),
 
       // 팀원 모집 글쓰기 버튼
-      floatingActionButton: _selectedIndex < 2
+      floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
               onPressed: () {
                 showDialog(
@@ -140,15 +131,6 @@ class _ProjectListState extends State<ProjectList> {
 
   Future<void> _loadProjects() async {
     try {
-      // 알림 탭인 경우 특수 처리
-      if (widget.category == '알림') {
-        setState(() {
-          _isLoading = false;
-          _projects = [];
-        });
-        return;
-      }
-
       // SharedPreferences에서 토큰 조회
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('auth_token');
@@ -161,8 +143,10 @@ class _ProjectListState extends State<ProjectList> {
         return;
       }
 
-      // 카테고리별 필터링 URL
-      final uri = Uri.parse('$API_BASE_URL/projects/by_category/?category=${widget.category}');
+      // 전체 탭에서는 모든 프로젝트를 조회하고, 필요하면 카테고리별 조회도 지원
+      final uri = widget.category == '전체'
+          ? Uri.parse('$API_BASE_URL/projects/')
+          : Uri.parse('$API_BASE_URL/projects/by_category/?category=${widget.category}');
 
       final response = await http.get(
         uri,
@@ -419,6 +403,9 @@ class ProjectDetailScreen extends StatefulWidget {
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
+  bool _isApplying = false;
+  bool _hasApplied = false;
+
   int _parseInt(dynamic value, {required int defaultValue}) {
     if (value is int) return value;
     if (value is String) return int.tryParse(value) ?? defaultValue;
@@ -437,6 +424,137 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           .toList();
     }
     return <String>[];
+  }
+
+  String? _projectId() {
+    final value = widget.project['id'] ?? widget.project['pk'] ?? widget.project['project_id'];
+    if (value == null || value.toString().trim().isEmpty) return null;
+    return value.toString();
+  }
+
+  String _responseMessage(http.Response response, String fallback) {
+    if (response.body.isEmpty) return fallback;
+
+    try {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map) {
+        final message = decoded['message'] ?? decoded['detail'] ?? decoded['error'];
+        if (message != null && message.toString().trim().isNotEmpty) {
+          return message.toString();
+        }
+      }
+      return decoded.toString();
+    } catch (_) {
+      final contentType = response.headers['content-type'] ?? '';
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+      final isHtml = contentType.contains('text/html') ||
+          body.trimLeft().toLowerCase().startsWith('<!doctype html') ||
+          body.trimLeft().toLowerCase().startsWith('<html');
+
+      if (isHtml) return fallback;
+      return body.trim().isEmpty ? fallback : body;
+    }
+  }
+
+  Future<http.Response> _sendApplyRequest(String projectId, String token) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Token $token',
+    };
+
+    final projectApply = await http.post(
+      Uri.parse('$API_BASE_URL/projects/$projectId/apply/'),
+      headers: headers,
+    );
+    if (projectApply.statusCode != 404) return projectApply;
+
+    final projectJoin = await http.post(
+      Uri.parse('$API_BASE_URL/projects/$projectId/join/'),
+      headers: headers,
+    );
+    return projectJoin;
+  }
+
+  Future<void> _applyToProject() async {
+    if (_isApplying || _hasApplied) return;
+
+    final projectId = _projectId();
+    if (projectId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('프로젝트 정보를 찾을 수 없습니다.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isApplying = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      if (token == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('로그인이 필요합니다.')),
+        );
+        return;
+      }
+
+      final response = await _sendApplyRequest(projectId, token);
+      print('[DEBUG] 신청 응답 상태 코드: ${response.statusCode}');
+      print('[DEBUG] 신청 응답 본문: ${utf8.decode(response.bodyBytes)}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final currentCount = _parseInt(
+          widget.project['current_participants'] ??
+              widget.project['current_members'] ??
+              widget.project['member_count'],
+          defaultValue: 0,
+        );
+
+        if (!mounted) return;
+        setState(() {
+          _hasApplied = true;
+          widget.project['current_participants'] = currentCount + 1;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_responseMessage(response, '신청이 완료되었습니다.'))),
+        );
+      } else if (response.statusCode == 400 || response.statusCode == 409) {
+        if (!mounted) return;
+        setState(() {
+          _hasApplied = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_responseMessage(response, '이미 신청한 프로젝트입니다.'))),
+        );
+      } else if (response.statusCode == 401) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('인증이 만료되었습니다. 다시 로그인해주세요.')),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_responseMessage(response, '신청에 실패했습니다.'))),
+        );
+      }
+    } catch (e) {
+      print('[DEBUG] 신청 예외 발생: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('오류가 발생했습니다: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isApplying = false;
+        });
+      }
+    }
   }
 
   @override
@@ -542,16 +660,28 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('신청하기 기능은 준비 중입니다.')));
-                      },
-                      icon: const Icon(Icons.send, size: 20),
-                      label: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 14),
-                        child: Text('신청하기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      onPressed: isOpen && !_isApplying && !_hasApplied ? _applyToProject : null,
+                      icon: _isApplying
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Icon(_hasApplied ? Icons.check : Icons.send, size: 20),
+                      label: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: Text(
+                          _isApplying ? '신청 중...' : (_hasApplied ? '신청 완료' : '신청하기'),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple.shade600,
+                        backgroundColor: _hasApplied ? Colors.green.shade600 : Colors.deepPurple.shade600,
+                        disabledBackgroundColor: _hasApplied ? Colors.green.shade600 : Colors.grey.shade400,
+                        disabledForegroundColor: Colors.white,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         elevation: 4,
