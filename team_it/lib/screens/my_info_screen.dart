@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'archive_screen.dart'; // ✅ 아카이브 화면 임포트
+import 'archive_screen.dart';
+import 'profile_detail_screen.dart';
+import 'package:team_it/screens/favorite_screen.dart';
 
 class MyInfoScreen extends StatefulWidget {
   const MyInfoScreen({super.key});
@@ -13,7 +15,6 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   bool _isLoading = true;
   String _email = '';
   String _displayName = '사용자';
-  String _major = '컴퓨터공학과';
   int _completedProjects = 0;
 
   @override
@@ -26,15 +27,12 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
     final prefs = await SharedPreferences.getInstance();
     final email = prefs.getString('user_email') ?? '알 수 없음';
     final completed = prefs.getInt('completed_projects') ?? 0;
-    final major = prefs.getString('user_major') ?? '컴퓨터공학과';
-
     final displayName = email.contains('@') ? email.split('@')[0] : email;
 
     if (mounted) {
       setState(() {
         _email = email;
         _displayName = displayName;
-        _major = major;
         _completedProjects = completed;
         _isLoading = false;
       });
@@ -47,132 +45,450 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        // ✅ 첫 번째 박스: 프로필 정보
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Colors.blue,
-                      child: Icon(Icons.person, color: Colors.white, size: 32),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _displayName,
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _major,
-                            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    const Icon(Icons.email, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text('웹메일: $_email')),
-                  ],
-                ),
-              ],
-            ),
+    return Container(
+      color: const Color(0xFFF3F3F3),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 28),
+        children: [
+          _ProfileTitle(onSettingsTap: _showComingSoon),
+          const SizedBox(height: 12),
+          _ProfileSummaryCard(
+            name: _displayName,
+            email: _email,
+            completionPercent: _completionPercent,
+            onTap: _openProfileDetail,
           ),
-        ),
-
-        const SizedBox(height: 24),
-
-        // ✅ 두 번째 박스: 완료 프로젝트 (누르면 아카이브로 이동)
-        Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
+          const SizedBox(height: 16),
+          _CompletionCard(
+            completedProjects: _completedProjects,
+            percent: _completionPercent,
+          ),
+          const SizedBox(height: 16),
+          _QuickActionCard(
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ArchiveScreen()),
-              );
+                MaterialPageRoute(
+                  builder: (context) => const FavoriteScreen(),
+                ),
+              );  
             },
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '완료 프로젝트',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Container(
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: (_completedProjects / 10).clamp(0.0, 1.0),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade600,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+          ),
+          const SizedBox(height: 16),
+          _MyActivityCard(
+            completedProjects: _completedProjects,
+            onWaitingTap: _showComingSoon,
+            onProgressTap: _showComingSoon,
+            onCompletedTap: _openArchive,
+            onMyPostsTap: _showComingSoon,
+          ),
+        ],
+      ),
+    );
+  }
+
+  double get _completionPercent => (_completedProjects / 10).clamp(0.0, 1.0);
+
+  void _openProfileDetail() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileDetailScreen(
+          name: _displayName,
+          email: _email,
+        ),
+      ),
+    );
+  }
+
+  void _openArchive() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ArchiveScreen()),
+    );
+  }
+
+  void _showComingSoon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('준비 중인 기능입니다.')),
+    );
+  }
+}
+
+class _ProfileTitle extends StatelessWidget {
+  final VoidCallback onSettingsTap;
+
+  const _ProfileTitle({required this.onSettingsTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              '프로필',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+          ),
+          IconButton(
+            onPressed: onSettingsTap,
+            icon: const Icon(Icons.settings, size: 30, color: Colors.grey),
+            tooltip: '설정',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileSummaryCard extends StatelessWidget {
+  final String name;
+  final String email;
+  final double completionPercent;
+  final VoidCallback onTap;
+
+  const _ProfileSummaryCard({
+    required this.name,
+    required this.email,
+    required this.completionPercent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 24,
+                backgroundColor: Colors.grey.shade300,
+                child: const Icon(Icons.person, color: Colors.white, size: 34),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '$_completedProjects개',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    '완료한 팀 활동은 아카이브에서 확인할 수 있습니다.',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
+                        const SizedBox(width: 8),
+                        _PercentBadge(percent: completionPercent),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 24),
-        const Center(
-          child: Column(
-            children: [
-              Text('추가 기능', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              SizedBox(height: 8),
-              Text('• 프로필 편집'),
+              const Icon(Icons.chevron_right, color: Colors.black54),
             ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _PercentBadge extends StatelessWidget {
+  final double percent;
+
+  const _PercentBadge({required this.percent});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF0DC),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        '${(percent * 100).round()}%',
+        style: const TextStyle(
+          color: Color(0xFFFF9F2E),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletionCard extends StatelessWidget {
+  final int completedProjects;
+  final double percent;
+
+  const _CompletionCard({
+    required this.completedProjects,
+    required this.percent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '프로젝트 완료율',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${(percent * 100).round()}%',
+                    style: const TextStyle(
+                      color: Color(0xFFFF8F1F),
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Text(
+                  '$completedProjects/10개',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 8,
+                value: percent,
+                color: const Color(0xFFFFC46B),
+                backgroundColor: Colors.grey.shade200,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _QuickActionCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: SizedBox(
+        height: 58,
+        child: Row(
+          children: [
+            Expanded(
+              child: _QuickActionButton(
+                icon: Icons.favorite,
+                iconColor: const Color(0xFFFF8585),
+                label: '관심 목록',
+                onTap: onTap,
+              ),
+            ),
+            Container(width: 1, height: 34, color: Colors.grey.shade300),
+            Expanded(
+              child: _QuickActionButton(
+                icon: Icons.schedule,
+                iconColor: Colors.black87,
+                label: '최근 본 글',
+                onTap: onTap,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: iconColor, size: 24),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MyActivityCard extends StatelessWidget {
+  final int completedProjects;
+  final VoidCallback onWaitingTap;
+  final VoidCallback onProgressTap;
+  final VoidCallback onCompletedTap;
+  final VoidCallback onMyPostsTap;
+
+  const _MyActivityCard({
+    required this.completedProjects,
+    required this.onWaitingTap,
+    required this.onProgressTap,
+    required this.onCompletedTap,
+    required this.onMyPostsTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 10, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                '나의 활동',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+            _ActivityRow(
+              icon: Icons.hourglass_empty,
+              title: '수락 대기 중인 활동',
+              onTap: onWaitingTap,
+            ),
+            _ActivityRow(
+              icon: Icons.track_changes,
+              title: '진행 중인 활동',
+              onTap: onProgressTap,
+            ),
+            _ActivityRow(
+              icon: Icons.check_circle_outline,
+              title: '완료한 활동',
+              trailingText: completedProjects > 0 ? '$completedProjects' : null,
+              onTap: onCompletedTap,
+            ),
+            _ActivityRow(
+              icon: Icons.edit,
+              title: '내가 올린 글',
+              onTap: onMyPostsTap,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? trailingText;
+  final VoidCallback onTap;
+
+  const _ActivityRow({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.trailingText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.black, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (trailingText != null) ...[
+              Text(
+                trailingText!,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+              const SizedBox(width: 8),
+            ],
+            const Icon(Icons.chevron_right, color: Colors.black54),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  final Widget child;
+
+  const _Panel({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.11),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }
