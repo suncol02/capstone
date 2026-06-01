@@ -50,11 +50,12 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 
-#### 4. Django 서버 실행
+#### 4. ASGI 서버 실행
 ```bash
-python manage.py runserver
+uvicorn config.asgi:application --host 0.0.0.0 --port 8000
 ```
 - 서버는 `http://localhost:8000`에서 실행됩니다.
+- 채팅 WebSocket은 `ws://localhost:8000/ws/chat-rooms/{id}/?token={auth_token}`으로 연결됩니다.
 
 #### 5. Django Admin 생성 (선택사항)
 ```bash
@@ -88,6 +89,7 @@ flutter run
 - `GET /api/chat-rooms/{id}/` - 채팅방 상세
 - `GET /api/chat-rooms/{id}/messages/` - 메시지 조회
 - `POST /api/chat-rooms/{id}/send_message/` - 메시지 전송
+- `WS /ws/chat-rooms/{id}/?token={auth_token}` - 실시간 메시지 송수신
 - `POST /api/chat-rooms/{id}/add_member/` - 멤버 추가
 - `POST /api/chat-rooms/{id}/remove_member/` - 멤버 제거
 
@@ -136,7 +138,7 @@ headers: {
 ## 📝 개발 노트
 
 ### 진행 중인 작업
-- [ ] WebSocket을 활용한 실시간 채팅
+- [x] WebSocket을 활용한 실시간 채팅
 - [ ] 이미지/파일 업로드
 - [ ] 채팅방 권한 관리 강화
 - [ ] 푸시 알림

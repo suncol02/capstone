@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
@@ -230,13 +232,18 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final List<dynamic> messages = [];
   bool _isLoadingMessages = true;
+  bool _isSending = false;
+  WebSocketChannel? _channel;
+  StreamSubscription? _socketSubscription;
 
   @override
   void initState() {
     super.initState();
     _fetchPreviousMessages();
+    _connectWebSocket();
   }
 
   // 백엔드 API에서 이전 대화 이력 가져오기
@@ -272,22 +279,126 @@ class _ChatScreenState extends State<ChatScreen> {
             messages.addAll(loadedMessages);
             _isLoadingMessages = false;
           });
+          _scrollToBottom();
         }
       } else {
-        print('[DEBUG] 메시지 로드 상태코드: ${response.statusCode}');
+        debugPrint('[DEBUG] 메시지 로드 상태코드: ${response.statusCode}');
         if (mounted) setState(() => _isLoadingMessages = false);
       }
     } catch (e) {
-      print('[DEBUG] 기존 메시지 로드 실패: $e');
+      debugPrint('[DEBUG] 기존 메시지 로드 실패: $e');
       if (mounted) setState(() => _isLoadingMessages = false);
     }
   }
 
+  Future<void> _connectWebSocket() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      if (token == null) return;
+
+      final uri = _webSocketUri(token);
+      final channel = WebSocketChannel.connect(uri);
+
+      _channel = channel;
+      _socketSubscription = channel.stream.listen(
+        _handleSocketMessage,
+        onError: (error) {
+          debugPrint('[DEBUG] WebSocket 오류: $error');
+          _closeSocket();
+        },
+        onDone: () {
+          debugPrint('[DEBUG] WebSocket 연결 종료');
+          _closeSocket();
+        },
+        cancelOnError: true,
+      );
+      debugPrint('[DEBUG] WebSocket 연결 시도: $uri');
+    } catch (e) {
+      debugPrint('[DEBUG] WebSocket 연결 실패: $e');
+      _closeSocket();
+    }
+  }
+
+  Uri _webSocketUri(String token) {
+    final apiUri = Uri.parse(API_BASE_URL);
+    final scheme = apiUri.scheme == 'https' ? 'wss' : 'ws';
+
+    return Uri(
+      scheme: scheme,
+      host: apiUri.host,
+      port: apiUri.hasPort ? apiUri.port : null,
+      path: '/ws/chat-rooms/${widget.chatRoomId}/',
+      queryParameters: {'token': token},
+    );
+  }
+
+  void _handleSocketMessage(dynamic event) {
+    try {
+      final decoded = event is String
+          ? jsonDecode(event)
+          : jsonDecode(utf8.decode(event));
+
+      if (decoded is Map && decoded['type'] == 'error') {
+        debugPrint('[DEBUG] WebSocket 서버 오류: ${decoded['message']}');
+        return;
+      }
+
+      if (decoded is Map) {
+        _appendMessage(Map<String, dynamic>.from(decoded));
+      }
+    } catch (e) {
+      debugPrint('[DEBUG] WebSocket 메시지 파싱 실패: $e');
+    }
+  }
+
+  void _appendMessage(dynamic message) {
+    final msg = _messageAsMap(message);
+    final incomingId = msg['id'];
+
+    if (incomingId != null) {
+      final alreadyExists = messages.any((item) {
+        final existing = _messageAsMap(item);
+        return existing['id'] == incomingId;
+      });
+
+      if (alreadyExists) return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      messages.add(msg);
+      _isLoadingMessages = false;
+    });
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   Future<void> sendMessage() async {
     final text = controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isSending) return;
+
+    if (_channel != null) {
+      setState(() => _isSending = true);
+      _channel!.sink.add(jsonEncode({'content': text}));
+      controller.clear();
+      setState(() => _isSending = false);
+      return;
+    }
 
     try {
+      setState(() => _isSending = true);
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
@@ -318,34 +429,43 @@ class _ChatScreenState extends State<ChatScreen> {
       if (response.statusCode == 201) {
         try {
           final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-          setState(() {
-            messages.add(decoded);
-          });
+          _appendMessage(decoded);
           controller.clear();
-          print('[DEBUG] HTTP로 메시지 전송 완료');
+          debugPrint('[DEBUG] HTTP로 메시지 전송 완료');
         } catch (e) {
-          print('[DEBUG] 응답 파싱 실패: $e');
+          debugPrint('[DEBUG] 응답 파싱 실패: $e');
           controller.clear();
         }
       } else {
-        print('[DEBUG] 메시지 전송 실패: ${response.statusCode}');
+        debugPrint('[DEBUG] 메시지 전송 실패: ${response.statusCode}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('메시지 전송 실패: ${response.statusCode}')),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      print('[DEBUG] 메시지 전송 예외: $e');
+      debugPrint('[DEBUG] 메시지 전송 예외: $e');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('메시지 전송 실패: $e')));
+    } finally {
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
   @override
   void dispose() {
+    _closeSocket();
+    _scrollController.dispose();
     controller.dispose();
     super.dispose();
+  }
+
+  void _closeSocket() {
+    _socketSubscription?.cancel();
+    _socketSubscription = null;
+    _channel?.sink.close();
+    _channel = null;
   }
 
   Map<String, dynamic> _messageAsMap(dynamic message) {
@@ -393,6 +513,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 : messages.isEmpty
                 ? const Center(child: Text('대화 기록이 없습니다.'))
                 : ListView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.all(16),
                     itemCount: messages.length,
                     itemBuilder: (_, index) {
@@ -463,7 +584,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   IconButton.filled(
                     icon: const Icon(Icons.send),
-                    onPressed: sendMessage,
+                    onPressed: _isSending ? null : sendMessage,
                   ),
                 ],
               ),
