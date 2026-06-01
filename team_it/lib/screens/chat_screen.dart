@@ -234,6 +234,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<dynamic> messages = [];
+  String _myUsername = '';
   bool _isLoadingMessages = true;
   bool _isSending = false;
   WebSocketChannel? _channel;
@@ -242,9 +243,21 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadMyInfo();
     _fetchPreviousMessages();
     _connectWebSocket();
   }
+
+  Future<void> _loadMyInfo() async {
+  final prefs = await SharedPreferences.getInstance();
+
+  setState(() {
+    _myUsername =
+        prefs.getString('username') ??
+        prefs.getString('user_email') ??
+        '';
+  });
+}
 
   // 백엔드 API에서 이전 대화 이력 가져오기
   Future<void> _fetchPreviousMessages() async {
@@ -521,14 +534,25 @@ class _ChatScreenState extends State<ChatScreen> {
                       final content = _messageContent(msg);
                       final senderName = _senderName(msg);
 
+                      final bool isMe =
+                          senderName == _myUsername ||
+                          senderName.toLowerCase() == _myUsername.toLowerCase();
+
                       return Align(
-                        alignment: Alignment.centerLeft,
+                        alignment:
+                            isMe
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              isMe
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
                           children: [
                             Padding(
                               padding: const EdgeInsets.only(
                                 left: 4,
+                                right: 4,
                                 bottom: 2,
                               ),
                               child: Text(
@@ -546,12 +570,17 @@ class _ChatScreenState extends State<ChatScreen> {
                                 vertical: 9,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE8ECFF),
+                                color:
+                                    isMe
+                                        ? const Color(0xFFFFEB3B)
+                                        : const Color(0xFFE8ECFF),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
                                 content,
-                                style: const TextStyle(color: Colors.black87),
+                                style: const TextStyle(
+                                  color: Colors.black87,
+                                ),
                               ),
                             ),
                           ],
