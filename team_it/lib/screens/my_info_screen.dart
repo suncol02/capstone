@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'archive_screen.dart';
 import 'profile_detail_screen.dart';
 import 'package:team_it/screens/favorite_screen.dart';
+import 'package:team_it/screens/recently_viewed_screen.dart';
+import 'package:team_it/screens/my_posts_screen.dart';
+import 'package:team_it/screens/login_screen.dart';
 
 class MyInfoScreen extends StatefulWidget {
   const MyInfoScreen({super.key});
@@ -50,7 +53,9 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(0, 0, 0, 28),
         children: [
-          _ProfileTitle(onSettingsTap: _showComingSoon),
+          _ProfileTitle(
+            onLogoutTap: _logout,
+          ),
           const SizedBox(height: 12),
           _ProfileSummaryCard(
             name: _displayName,
@@ -62,16 +67,25 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
           _CompletionCard(
             completedProjects: _completedProjects,
             percent: _completionPercent,
+            onTap: _openArchive,
           ),
           const SizedBox(height: 16),
           _QuickActionCard(
-            onTap: () {
+            onFavoriteTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => const FavoriteScreen(),
                 ),
-              );  
+              );
+            },
+            onRecentlyViewedTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const RecentlyViewedScreen(),
+                ),
+              );
             },
           ),
           const SizedBox(height: 16),
@@ -80,7 +94,14 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
             onWaitingTap: _showComingSoon,
             onProgressTap: _showComingSoon,
             onCompletedTap: _openArchive,
-            onMyPostsTap: _showComingSoon,
+            onMyPostsTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const MyPostsScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -88,6 +109,60 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   }
 
   double get _completionPercent => (_completedProjects / 10).clamp(0.0, 1.0);
+
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('로그아웃'),
+        content: const Text('정말 로그아웃하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('로그아웃'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+      await prefs.remove('user_email');
+      await prefs.remove('user_id');
+      await prefs.remove('username');
+      await prefs.remove('user_profile_score');
+      await prefs.remove('completed_projects');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그아웃되었습니다.')),
+      );
+
+      // 로그인 화면으로 이동
+      Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const LoginScreen(),
+      ),
+      (route) => false,
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('로그아웃 실패: $e'),
+        ),
+      );
+    }
+  }
 
   void _openProfileDetail() {
     Navigator.push(
@@ -116,32 +191,49 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
 }
 
 class _ProfileTitle extends StatelessWidget {
-  final VoidCallback onSettingsTap;
+  final VoidCallback onLogoutTap;
 
-  const _ProfileTitle({required this.onSettingsTap});
+  const _ProfileTitle({
+    required this.onLogoutTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 6),
+      padding: const EdgeInsets.fromLTRB(
+        12,
+        10,
+        12,
+        6,
+      ),
       child: Row(
         children: [
           const Expanded(
             child: Text(
               '프로필',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
+
           IconButton(
-            onPressed: onSettingsTap,
-            icon: const Icon(Icons.settings, size: 30, color: Colors.grey),
-            tooltip: '설정',
+            onPressed: onLogoutTap,
+            icon: const Icon(
+              Icons.logout_outlined,
+              size: 28,
+              color: Colors.black,
+            ),
+            tooltip: '로그아웃',
           ),
         ],
       ),
     );
   }
 }
+
+
 
 class _ProfileSummaryCard extends StatelessWidget {
   final String name;
@@ -240,58 +332,66 @@ class _PercentBadge extends StatelessWidget {
 class _CompletionCard extends StatelessWidget {
   final int completedProjects;
   final double percent;
+  final VoidCallback onTap;
 
   const _CompletionCard({
     required this.completedProjects,
     required this.percent,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return _Panel(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '프로젝트 완료율',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${(percent * 100).round()}%',
-                    style: const TextStyle(
-                      color: Color(0xFFFF8F1F),
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '프로젝트 완료율',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${(percent * 100).round()}%',
+                      style: const TextStyle(
+                        color: Color(0xFFFF8F1F),
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  '$completedProjects/10개',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                  Text(
+                    '$completedProjects/10개',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: LinearProgressIndicator(
-                minHeight: 8,
-                value: percent,
-                color: const Color(0xFFFFC46B),
-                backgroundColor: Colors.grey.shade200,
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right, size: 18, color: Colors.black54),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  minHeight: 8,
+                  value: percent,
+                  color: const Color(0xFFFFC46B),
+                  backgroundColor: Colors.grey.shade200,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -299,9 +399,13 @@ class _CompletionCard extends StatelessWidget {
 }
 
 class _QuickActionCard extends StatelessWidget {
-  final VoidCallback onTap;
+  final VoidCallback onFavoriteTap;
+  final VoidCallback onRecentlyViewedTap;
 
-  const _QuickActionCard({required this.onTap});
+  const _QuickActionCard({
+    required this.onFavoriteTap,
+    required this.onRecentlyViewedTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +419,7 @@ class _QuickActionCard extends StatelessWidget {
                 icon: Icons.favorite,
                 iconColor: const Color(0xFFFF8585),
                 label: '관심 목록',
-                onTap: onTap,
+                onTap: onFavoriteTap,
               ),
             ),
             Container(width: 1, height: 34, color: Colors.grey.shade300),
@@ -324,7 +428,7 @@ class _QuickActionCard extends StatelessWidget {
                 icon: Icons.schedule,
                 iconColor: Colors.black87,
                 label: '최근 본 글',
-                onTap: onTap,
+                onTap: onRecentlyViewedTap,
               ),
             ),
           ],
@@ -366,6 +470,7 @@ class _QuickActionButton extends StatelessWidget {
   }
 }
 
+
 class _MyActivityCard extends StatelessWidget {
   final int completedProjects;
   final VoidCallback onWaitingTap;
@@ -405,12 +510,6 @@ class _MyActivityCard extends StatelessWidget {
               icon: Icons.track_changes,
               title: '진행 중인 활동',
               onTap: onProgressTap,
-            ),
-            _ActivityRow(
-              icon: Icons.check_circle_outline,
-              title: '완료한 활동',
-              trailingText: completedProjects > 0 ? '$completedProjects' : null,
-              onTap: onCompletedTap,
             ),
             _ActivityRow(
               icon: Icons.edit,

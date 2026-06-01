@@ -58,13 +58,22 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response.statusCode == 200) {
         // 로그인 성공
         final responseData = jsonDecode(response.body);
+        print('[DEBUG] 로그인 응답 전체: $responseData');
         final String token = responseData['token'];
         final String email = responseData['email'];
+        final String? department = responseData['department']; // 학과 가져오기
+        final String? userId = responseData['id']?.toString() ?? responseData['user_id']?.toString();
 
         // SharedPreferences에 토큰 저장
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', token);
         await prefs.setString('user_email', email);
+        if (department != null) {
+          await prefs.setString('user_major', department);
+        }
+        if (userId != null) {
+          await prefs.setString('user_id', userId);
+        }
 
         // 메인 화면으로 이동
         if (mounted) {

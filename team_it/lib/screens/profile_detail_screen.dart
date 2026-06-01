@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'profile_edit_screen.dart';
 
-class ProfileDetailScreen extends StatelessWidget {
+class ProfileDetailScreen extends StatefulWidget {
   final String name;
   final String email;
 
@@ -11,7 +13,40 @@ class ProfileDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<ProfileDetailScreen> createState() => _ProfileDetailScreenState();
+}
+
+class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
+  String _major = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  Future<void> _loadUserInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final major = prefs.getString('user_major') ?? '';
+
+    if (mounted) {
+      setState(() {
+        _major = major;
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('프로필')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F3F3),
       appBar: AppBar(
@@ -28,6 +63,7 @@ class ProfileDetailScreen extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
+          // 프로필 헤더
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 28, 16, 8),
@@ -44,29 +80,40 @@ class ProfileDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        name,
+                        widget.name,
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 3),
-                      Text(name, style: const TextStyle(fontSize: 12)),
+                      Text(
+                        widget.email,
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
+          // 프로필 수정 버튼
           Container(
             color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(54, 4, 54, 8),
+            padding: const EdgeInsets.fromLTRB(54, 4, 54, 12),
             child: SizedBox(
-              height: 28,
+              height: 32,
               child: ElevatedButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('프로필 수정은 준비 중입니다.')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProfileEditScreen(
+                        name: widget.name,
+                        email: widget.email,
+                        major: _major,
+                      ),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -86,13 +133,14 @@ class ProfileDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const _InfoSectionTitle('내 정보'),
-          const _InfoRow(label: '생년월일', value: ''),
-          const _InfoRow(label: '성별', value: ''),
-          const _InfoRow(label: '휴대폰 번호', value: ''),
-          const _InfoRow(label: '학교', value: ''),
-          const _InfoRow(label: '학과', value: ''),
-          const _InfoRow(label: '학번', value: ''),
-          _InfoRow(label: '이메일', value: email),
+          _InfoRow(
+            label: '학과',
+            value: _major.trim().isNotEmpty ? _major : '정보 없음',
+          ),
+          _InfoRow(
+            label: '이메일',
+            value: widget.email,
+          ),
         ],
       ),
     );
@@ -149,12 +197,15 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          value.trim().isEmpty
-              ? const SizedBox(height: 18)
-              : Text(
-                  value,
-                  style: const TextStyle(fontSize: 14, color: Colors.black87),
-                ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              color: value == '정보 없음'
+                  ? Colors.grey.shade400
+                  : Colors.black87,
+            ),
+          ),
         ],
       ),
     );

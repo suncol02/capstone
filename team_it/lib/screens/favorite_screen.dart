@@ -103,13 +103,13 @@ class _FavoriteScreenState
             padding:
                 const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 14,
+              vertical: 20,
             ),
 
             child: Row(
               children: [
                 CircleAvatar(
-                  radius: 24,
+                  radius: 32,
                   backgroundColor:
                       const Color(
                     0xFFE9ECFF,
@@ -122,11 +122,12 @@ class _FavoriteScreenState
                         const TextStyle(
                       fontWeight:
                           FontWeight.bold,
+                      fontSize: 18,
                     ),
                   ),
                 ),
 
-                const SizedBox(width: 14),
+                const SizedBox(width: 16),
 
                 Expanded(
                   child: Column(
@@ -142,12 +143,12 @@ class _FavoriteScreenState
                             const TextStyle(
                           fontWeight:
                               FontWeight.bold,
-                          fontSize: 16,
+                          fontSize: 18,
                         ),
                       ),
 
                       const SizedBox(
-                        height: 6,
+                        height: 8,
                       ),
 
                       const Text(
@@ -159,7 +160,7 @@ class _FavoriteScreenState
                             0xFF7A82F0,
                           ),
 
-                          fontSize: 12,
+                          fontSize: 13,
                         ),
                       ),
                     ],
@@ -178,10 +179,11 @@ class _FavoriteScreenState
                       child: const Icon(
                         Icons.favorite,
                         color: Colors.red,
+                        size: 28,
                       ),
                     ),
 
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
 
                     Text(
                       '${index + 1}',
@@ -189,6 +191,7 @@ class _FavoriteScreenState
                       style: TextStyle(
                         color:
                             Colors.grey.shade500,
+                        fontSize: 12,
                       ),
                     ),
                   ],

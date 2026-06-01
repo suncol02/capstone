@@ -7,6 +7,7 @@ import 'create_project_modal.dart';
 import 'my_info_screen.dart';
 import 'archive_screen.dart';
 import 'project_detail_screen.dart';
+import 'chat_screen.dart';
 
 // API 기본 URL (백엔드 서버 주소로 변경 필요)
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
@@ -39,8 +40,9 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _openChat() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('채팅은 프로젝트 상세 화면에서 이용할 수 있습니다.')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ChatEntryScreen()),
     );
   }
 
@@ -50,7 +52,10 @@ class _MainScreenState extends State<MainScreen> {
     await prefs.remove('user_email');
 
     if (mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
     }
   }
 
@@ -66,7 +71,10 @@ class _MainScreenState extends State<MainScreen> {
           : AppBar(
               title: const Text(
                 'Team-it(로고)',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
               ),
               centerTitle: true,
               elevation: 0,
@@ -114,7 +122,8 @@ class _MainScreenState extends State<MainScreen> {
               onPressed: () {
                 showDialog(
                   context: context,
-                  builder: (context) => CreateProjectModal(onProjectCreated: _refreshProjectList),
+                  builder: (context) =>
+                      CreateProjectModal(onProjectCreated: _refreshProjectList),
                 );
               },
               backgroundColor: const Color(0xFF8E8CF1),
@@ -159,7 +168,10 @@ class _ProjectListState extends State<ProjectList> {
       // 토큰이 없으면 로그인 화면으로 이동
       if (token == null) {
         if (mounted) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
         }
         return;
       }
@@ -167,11 +179,16 @@ class _ProjectListState extends State<ProjectList> {
       // 전체 탭에서는 모든 프로젝트를 조회하고, 필요하면 카테고리별 조회도 지원
       final uri = widget.category == '전체'
           ? Uri.parse('$API_BASE_URL/projects/')
-          : Uri.parse('$API_BASE_URL/projects/by_category/?category=${widget.category}');
+          : Uri.parse(
+              '$API_BASE_URL/projects/by_category/?category=${widget.category}',
+            );
 
       final response = await http.get(
         uri,
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Token $token',
+        },
       );
 
       print('[DEBUG] 카테고리: ${widget.category}, 상태 코드: ${response.statusCode}');
@@ -188,7 +205,10 @@ class _ProjectListState extends State<ProjectList> {
       } else if (response.statusCode == 401) {
         // 인증 실패 - 로그인 화면으로 이동
         if (mounted) {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
         }
       } else {
         if (mounted) {
@@ -239,22 +259,23 @@ class _ProjectListState extends State<ProjectList> {
   }
 
   int _currentCount(dynamic project) {
-    return project['current_participants'] is int
-        ? project['current_participants']
-        : project['current_members'] is int
-        ? project['current_members']
-        : project['member_count'] is int
-        ? project['member_count']
-        : _parseInt(
-            project['current_participants'] ?? project['current_members'] ?? project['member_count'],
-            defaultValue: 1,
-          );
+    var value = project['current_participants'] ??
+        project['current_members'] ??
+        project['member_count'] ??
+        0;
+    return _parseInt(value, defaultValue: 0);
   }
 
-  bool _isOpen(dynamic project) => _currentCount(project) < _maxCount(project);
+  bool _isOpen(dynamic project) {
+    final current = _currentCount(project);
+    final max = _maxCount(project);
+    print('[DEBUG] 모집 상태: $current / $max');
+    return current < max;
+  }
 
   bool _isClosingSoon(dynamic project) {
     final remaining = _maxCount(project) - _currentCount(project);
+    print('[DEBUG] 마감 임박 체크: remaining=$remaining (임박: ${remaining > 0 && remaining <= 2})');
     return remaining > 0 && remaining <= 2;
   }
 
@@ -262,7 +283,11 @@ class _ProjectListState extends State<ProjectList> {
     final value = project['requirements_list'] ?? project['requirements'];
     if (value is List) return value.map((e) => e.toString()).toList();
     if (value is String) {
-      return value.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      return value
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
     }
     return <String>[];
   }
@@ -283,7 +308,10 @@ class _ProjectListState extends State<ProjectList> {
     return _projectsForCategory().where((project) {
       final title = _projectTitle(project).toLowerCase();
       final description = '${project['description'] ?? ''}'.toLowerCase();
-      final matchesSearch = lowerQuery.isEmpty || title.contains(lowerQuery) || description.contains(lowerQuery);
+      final matchesSearch =
+          lowerQuery.isEmpty ||
+          title.contains(lowerQuery) ||
+          description.contains(lowerQuery);
 
       if (!matchesSearch) return false;
       if (_selectedStatus == '모집중') return _isOpen(project);
@@ -349,7 +377,8 @@ class _ProjectListState extends State<ProjectList> {
                   totalCount: categoryProjects.length,
                   openCount: openCount,
                   closingCount: closingCount,
-                  onStatusChanged: (status) => setState(() => _selectedStatus = status),
+                  onStatusChanged: (status) =>
+                      setState(() => _selectedStatus = status),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -358,20 +387,31 @@ class _ProjectListState extends State<ProjectList> {
                 ),
                 const SizedBox(height: 16),
                 if (_projects.isEmpty)
-                  const Center(child: Padding(padding: EdgeInsets.only(top: 80), child: Text('프로젝트가 없습니다.')))
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 80),
+                      child: Text('프로젝트가 없습니다.'),
+                    ),
+                  )
                 else if (visibleProjects.isEmpty)
-                  const Center(child: Padding(padding: EdgeInsets.only(top: 80), child: Text('검색 결과가 없습니다.')))
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 80),
+                      child: Text('검색 결과가 없습니다.'),
+                    ),
+                  )
                 else
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: visibleProjects.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 38,
-                      childAspectRatio: 0.97,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 38,
+                          childAspectRatio: 0.97,
+                        ),
                     itemBuilder: (context, index) {
                       final project = visibleProjects[index];
                       return _ProjectGridCard(
@@ -381,11 +421,17 @@ class _ProjectListState extends State<ProjectList> {
                         isOpen: _isOpen(project),
                         isClosingSoon: _isClosingSoon(project),
                         requirements: _requirements(project),
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          final changed = await Navigator.push<bool>(
                             context,
-                            MaterialPageRoute(builder: (context) => ProjectDetailScreen(project: project)),
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ProjectDetailScreen(project: project),
+                            ),
                           );
+                          if (changed == true) {
+                            _loadProjects();
+                          }
                         },
                       );
                     },
@@ -459,7 +505,9 @@ class _CategoryTab extends StatelessWidget {
               width: 78,
               height: 3,
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF8E8CF1) : Colors.transparent,
+                color: isSelected
+                    ? const Color(0xFF8E8CF1)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -508,7 +556,11 @@ class _SearchFilterPanel extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: '프로젝트 검색',
                 hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                prefixIcon: const Icon(Icons.search, color: Colors.black87, size: 24),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: Colors.black87,
+                  size: 24,
+                ),
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -583,7 +635,9 @@ class _StatusChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected ? background : background.withOpacity(0.55),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: isSelected ? background : Colors.transparent),
+          border: Border.all(
+            color: isSelected ? background : Colors.transparent,
+          ),
         ),
         child: Text(
           label,
@@ -660,24 +714,21 @@ class _ProjectGridCardState extends State<_ProjectGridCard> {
 
   @override
   Widget build(BuildContext context) {
-    final statusLabel =
-        widget.isOpen
-            ? (widget.isClosingSoon ? '마감 임박' : '모집중')
-            : '마감';
+    final statusLabel = widget.isOpen
+        ? (widget.isClosingSoon ? '마감 임박' : '모집중')
+        : '마감';
 
-    final statusBg =
-        widget.isOpen
-            ? (widget.isClosingSoon
-                ? const Color(0xFFFFF1B8)
-                : const Color(0xFFD9F4CF))
-            : Colors.grey.shade200;
+    final statusBg = widget.isOpen
+        ? (widget.isClosingSoon
+              ? const Color(0xFFFFF1B8)
+              : const Color(0xFFD9F4CF))
+        : Colors.grey.shade200;
 
-    final statusColor =
-        widget.isOpen
-            ? (widget.isClosingSoon
-                ? const Color(0xFFFFA620)
-                : const Color(0xFF5DB75B))
-            : Colors.grey.shade700;
+    final statusColor = widget.isOpen
+        ? (widget.isClosingSoon
+              ? const Color(0xFFFFA620)
+              : const Color(0xFF5DB75B))
+        : Colors.grey.shade700;
 
     return Container(
       decoration: BoxDecoration(
@@ -698,12 +749,9 @@ class _ProjectGridCardState extends State<_ProjectGridCard> {
                   GestureDetector(
                     onTap: toggleFavorite,
                     child: Icon(
-                      isFavorite
-                          ? Icons.favorite
-                          : Icons.favorite_border,
+                      isFavorite ? Icons.favorite : Icons.favorite_border,
                       size: 17,
-                      color:
-                          isFavorite ? Colors.red : Colors.black,
+                      color: isFavorite ? Colors.red : Colors.black,
                     ),
                   ),
                   const Spacer(),
@@ -756,28 +804,27 @@ class _ProjectGridCardState extends State<_ProjectGridCard> {
               Wrap(
                 spacing: 5,
                 runSpacing: 5,
-                children:
-                    widget.requirements.take(2).map((req) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE9ECFF),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          req,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF7A82F0),
-                            fontSize: 9,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                children: widget.requirements.take(2).map((req) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE9ECFF),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      req,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF7A82F0),
+                        fontSize: 9,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
               const Spacer(),
               SizedBox(
@@ -787,19 +834,14 @@ class _ProjectGridCardState extends State<_ProjectGridCard> {
                   onPressed: widget.onTap,
                   style: OutlinedButton.styleFrom(
                     padding: EdgeInsets.zero,
-                    side: const BorderSide(
-                      color: Color(0xFF8E8CF1),
-                    ),
+                    side: const BorderSide(color: Color(0xFF8E8CF1)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                   child: const Text(
                     'View Details',
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: Colors.black87,
-                    ),
+                    style: TextStyle(fontSize: 9, color: Colors.black87),
                   ),
                 ),
               ),
