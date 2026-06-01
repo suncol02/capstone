@@ -287,6 +287,52 @@ class Recruitment(models.Model):
         return f"{self.project.title} - {self.role}"
 
 
+class Application(models.Model):
+    """프로젝트 신청 모델
+
+    사용자가 특정 프로젝트에 신청했음을 기록합니다. 중복 신청을 방지하기 위해
+    `user`와 `project`의 조합을 유일하게 유지합니다.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'pending'),
+        ('accepted', 'accepted'),
+        ('rejected', 'rejected'),
+        ('joined', 'joined'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='applications',
+        help_text='신청자'
+    )
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='applications',
+        help_text='신청한 프로젝트'
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        help_text='신청 상태'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'project')
+        verbose_name = '신청'
+        verbose_name_plural = '신청들'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.project.title} ({self.status})"
+
+
 class Archive(models.Model):
     """아카이브 모델
     

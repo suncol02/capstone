@@ -10,11 +10,12 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
-from .models import Project, ChatRoom, Message
+
+from .models import Project, ChatRoom, Message, Application, Archive
 from .serializers import (
     ProjectSerializer, ProjectListSerializer, ProjectCreateSerializer,
     ChatRoomSerializer, ChatRoomListSerializer,
-    MessageSerializer
+    MessageSerializer, ArchiveSerializer, ApplicationSerializer
 )
 
 
@@ -108,6 +109,81 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = ChatRoomListSerializer(chat_rooms, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'])
+    def apply(self, request, pk=None):
+        """프로젝트 신청 처리
+
+        중복 신청을 방지하고 새로운 Application 레코드를 생성합니다.
+        """
+        project = self.get_object()
+        user = request.user
+
+        # 이미 신청했는지 확인
+        if Application.objects.filter(user=user, project=project).exists():
+            return Response(
+                {'error': '이미 신청한 프로젝트입니다.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        Application.objects.create(user=user, project=project)
+        return Response({'message': '신청이 완료되었습니다.'}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def join(self, request, pk=None):
+        """구식 클라이언트용 대체 엔드포인트 (apply 대체)
+
+        `apply` 엔드포인트가 없을 때 클라이언트가 `join`을 호출하므로
+        동일한 동작을 수행하도록 합니다.
+        """
+        return self.apply(request, pk)
+
+    @action(detail=True, methods=['get'], url_path='applicants')
+    def applicants(self, request, pk=None):
+        """해당 프로젝트에 신청한 사용자 목록 조회 (소유자만)"""
+        project = self.get_object()
+
+        if project.owner != request.user:
+            return Response({'error': '권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
+
+        apps = Application.objects.filter(project=project).select_related('user')
+        serializer = ApplicationSerializer(apps, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path=r'applicants/(?P<user_id>[^/.]+)/approve')
+    def approve_applicant(self, request, pk=None, user_id=None):
+        """특정 신청자 수락"""
+        project = self.get_object()
+
+        if project.owner != request.user:
+            return Response({'error': '권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            app = Application.objects.get(project=project, user__id=user_id)
+        except Application.DoesNotExist:
+            return Response({'error': '신청자를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+        app.status = 'accepted'
+        app.save()
+
+        return Response({'message': '신청자를 수락했습니다.'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path=r'applicants/(?P<user_id>[^/.]+)/reject')
+    def reject_applicant(self, request, pk=None, user_id=None):
+        """특정 신청자 거절"""
+        project = self.get_object()
+
+        if project.owner != request.user:
+            return Response({'error': '권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            app = Application.objects.get(project=project, user__id=user_id)
+        except Application.DoesNotExist:
+            return Response({'error': '신청자를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+        app.status = 'rejected'
+        app.save()
+
+        return Response({'message': '신청자를 거절했습니다.'}, status=status.HTTP_200_OK)
 
 class ChatRoomViewSet(viewsets.ModelViewSet):
     """채팅방 관리 ViewSet
@@ -224,3 +300,18 @@ class MessageViewSet(viewsets.ModelViewSet):
         """사용자가 속한 채팅방의 메시지만 조회"""
         return Message.objects.filter(chat_room__members=self.request.user)
 
+
+class ArchiveViewSet(viewsets.ModelViewSet):
+    """아카이브 항목 관리 ViewSet
+
+    사용자는 자신의 아카이브 항목만 조회/생성/삭제할 수 있습니다.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = ArchiveSerializer
+
+    def get_queryset(self):
+        return Archive.objects.filter(user=self.request.user).order_by('-archived_at')
+
+    def perform_create(self, serializer):
+        # 요청의 user는 현재 로그인 사용자로 설정
+        serializer.save(user=self.request.user)

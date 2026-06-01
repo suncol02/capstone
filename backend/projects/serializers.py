@@ -5,7 +5,7 @@ JSON 형식으로 변환하기 위한 Serializer들을 정의합니다.
 """
 
 from rest_framework import serializers
-from .models import Project, ChatRoom, Message
+from .models import Project, ChatRoom, Message, Archive, Application
 from accounts.models import User
 
 
@@ -160,3 +160,35 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
         return project
+
+
+class ArchiveSerializer(serializers.ModelSerializer):
+    """아카이브 항목 직렬화"""
+    user = UserSimpleSerializer(read_only=True)
+    project_detail = ProjectSerializer(source='project', read_only=True)
+
+    class Meta:
+        model = Archive
+        fields = ['id', 'user', 'project', 'project_detail', 'role', 'result', 'archived_at']
+        read_only_fields = ['user', 'archived_at']
+
+
+class ApplicationSerializer(serializers.ModelSerializer):
+    """프로젝트 신청 항목 직렬화"""
+    user = UserSimpleSerializer(read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    name = serializers.SerializerMethodField()
+    email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = Application
+        fields = [
+            'id', 'user', 'user_id', 'username', 'name', 'email',
+            'project', 'status', 'created_at'
+        ]
+        read_only_fields = ['user', 'created_at']
+
+    def get_name(self, obj):
+        full_name = obj.user.get_full_name()
+        return full_name or obj.user.username or obj.user.email

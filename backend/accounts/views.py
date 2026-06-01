@@ -130,6 +130,7 @@ def login(request):
                 "message": "로그인 성공!",
                 "user_id": user.id,
                 "email": user.email,
+                "department": user.department,
                 "token": token.key
             }, status=status.HTTP_200_OK)
         else:

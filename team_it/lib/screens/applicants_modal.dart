@@ -296,6 +296,8 @@ class _ApplicantsModalState extends State<ApplicantsModal> {
                               final status = applicant['status'] ??
                                   applicant['approval_status'] ??
                                   'pending';
+                              final isAccepted = status == 'accepted' ||
+                                  status == 'approved';
 
                               return Column(
                                 children: [
@@ -420,19 +422,19 @@ class _ApplicantsModalState extends State<ApplicantsModal> {
                                               vertical: 4,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: status == 'approved'
+                                              color: isAccepted
                                                   ? Colors.green.shade100
                                                   : Colors.red.shade100,
                                               borderRadius:
                                                   BorderRadius.circular(4),
                                             ),
                                             child: Text(
-                                              status == 'approved'
+                                              isAccepted
                                                   ? '수락'
                                                   : '거절',
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                color: status == 'approved'
+                                                color: isAccepted
                                                     ? Colors.green.shade700
                                                     : Colors.red.shade700,
                                                 fontWeight: FontWeight.w600,
