@@ -1,10 +1,10 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'edit_project_modal.dart';
 import 'applicants_modal.dart';
+import 'project_evaluation_screen.dart';
 
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
@@ -22,11 +22,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   bool _hasApplied = false;
   bool _isOwner = false;
   String? _localApplicationPeriod;
+  String _applicationStatus = 'none';
 
   @override
   void initState() {
     super.initState();
     _loadLocalProjectMeta();
+    _checkApplicationStatus();
     _saveRecentlyViewedProject();
   }
 
@@ -100,6 +102,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     if (projectId != null) {
       period = prefs.getString('project_period_$projectId');
       localOwner = prefs.getBool('project_owner_$projectId') ?? false;
+
+      if (prefs.getBool('applied_$projectId') == true) {
+        _hasApplied = true;
+        _applicationStatus = 'pending';
+      }
     }
     period ??= prefs.getString('project_period_title_$title');
     localOwner =
@@ -119,18 +126,93 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
   }
 
+  Future<void> _checkApplicationStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentUserEmail = prefs.getString('user_email') ?? '';
+      final currentUserId = prefs.getString('user_id') ?? '';
+      final token = prefs.getString('auth_token');
+      final projectId = _projectId();
+
+      if (token == null || projectId == null) return;
+
+      final endpoints = [
+        '$API_BASE_URL/projects/$projectId/applicants/',
+        '$API_BASE_URL/projects/$projectId/applications/',
+        '$API_BASE_URL/accounts/applications/?project=$projectId',
+      ];
+
+      http.Response? response;
+      for (var endpoint in endpoints) {
+        try {
+          final res = await http.get(
+            Uri.parse(endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Token $token',
+            },
+          ).timeout(const Duration(seconds: 5));
+
+          if (res.statusCode == 200) {
+            response = res;
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (response != null && response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        final List<dynamic> applicants =
+            decoded is List ? decoded : decoded['results'] ?? decoded['data'] ?? [];
+
+        bool found = false;
+        String status = 'none';
+
+        for (var app in applicants) {
+          final appEmail = app['email'] ?? app['user_email'] ?? '';
+          final appId = app['user_id']?.toString() ?? app['user']?.toString() ?? app['id']?.toString() ?? '';
+
+          if (appEmail == currentUserEmail || (currentUserId.isNotEmpty && appId == currentUserId)) {
+            found = true;
+            final appStatus = app['status'] ?? app['approval_status'] ?? 'pending';
+
+            if (appStatus == 'accepted' || appStatus == 'approved') {
+              status = 'accepted';
+            } else if (appStatus == 'rejected') {
+              status = 'rejected';
+            } else {
+              status = 'pending';
+            }
+            break;
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            if (found) {
+              _applicationStatus = status;
+              _hasApplied = (status == 'pending' || status == 'accepted');
+            }
+          });
+        }
+      }
+    } catch (e) {
+      print('[DEBUG] 지원 현황 검증 오류: $e');
+    }
+  }
+
   Future<void> _saveRecentlyViewedProject() async {
     final prefs = await SharedPreferences.getInstance();
     final projectId = _projectId();
     if (projectId == null) return;
 
     try {
-      // 기존 최근 본 프로젝트 목록 가져오기
       final recentlyViewedJson =
           prefs.getString('recently_viewed_projects') ?? '[]';
       List<dynamic> recentlyViewed = jsonDecode(recentlyViewedJson);
 
-      // 현재 프로젝트를 최상위로 옮기거나 추가
       final newProject = {
         'id': projectId,
         'name': _projectTitle(),
@@ -138,19 +220,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      // 이미 존재하는 프로젝트면 제거
       recentlyViewed
           .removeWhere((p) => p['id'].toString() == projectId.toString());
 
-      // 맨 앞에 추가
       recentlyViewed.insert(0, newProject);
 
-      // 최대 10개만 유지
       if (recentlyViewed.length > 10) {
         recentlyViewed = recentlyViewed.sublist(0, 10);
       }
 
-      // 저장
       await prefs.setString(
         'recently_viewed_projects',
         jsonEncode(recentlyViewed),
@@ -283,9 +361,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           defaultValue: 0,
         );
 
+        await prefs.setBool('applied_$projectId', true);
+
         if (!mounted) return;
         setState(() {
           _hasApplied = true;
+          _applicationStatus = 'pending';
           widget.project['current_participants'] = currentCount + 1;
         });
 
@@ -293,6 +374,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           SnackBar(content: Text(_responseMessage(response, '신청이 완료되었습니다.'))),
         );
       } else if (response.statusCode == 400 || response.statusCode == 409) {
+        await prefs.setBool('applied_$projectId', true);
         if (!mounted) return;
         setState(() {
           _hasApplied = true;
@@ -407,15 +489,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         builder: (context) => EditProjectModal(
           project: widget.project,
           onProjectUpdated: () {
-            setState(() {
-              // 프로젝트 정보 새로고침
-            });
+            setState(() {});
           },
         ),
       ).then((result) {
         if (result != null) {
           setState(() {
-            // 수정된 데이터로 현재 프로젝트 업데이트
             widget.project['name'] = result['name'];
             widget.project['title'] = result['name'];
             widget.project['description'] = result['description'];
@@ -462,9 +541,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ? (currentCount / maxCount).clamp(0.0, 1.0)
         : 0.0;
     final isOpen = currentCount < maxCount;
+    final isFull = currentCount >= maxCount; // ★ 추가: 인원이 찼는지 확인
     final requirements = _parseRequirements(
       project['requirements_list'] ?? project['requirements'],
     );
+
+    String buttonText = '신청하기';
+    bool canApply = isOpen && !_isApplying && !_hasApplied && _applicationStatus != 'accepted' && _applicationStatus != 'rejected';
+
+    if (_applicationStatus == 'accepted') {
+      buttonText = '가입된 프로젝트입니다.';
+      canApply = false;
+    } else if (_applicationStatus == 'pending' || _hasApplied) {
+      buttonText = '신청 완료';
+      canApply = false;
+    } else if (_applicationStatus == 'rejected') {
+      buttonText = '신청 거절됨';
+      canApply = false;
+    } else if (!isOpen) {
+      buttonText = '모집 마감';
+      canApply = false;
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -677,30 +774,56 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     width: double.infinity,
                     height: 56,
                     child: _isOwner
-                        ? OutlinedButton.icon(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => ApplicantsModal(
-                                  projectId: _projectId() ?? '',
-                                  projectTitle: title,
+                        ? (isFull // ★ 인원이 다 찼을 때
+                            ? ElevatedButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ProjectEvaluationScreen(
+                                        project: widget.project,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF9B98EB),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                 ),
-                              );
-                            },
-                            icon: const Icon(Icons.group_add_outlined),
-                            label: const Text('신청 인원 확인'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF6F6CDF),
-                              side: const BorderSide(color: Color(0xFF9B98EB)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                          )
+                                child: const Text(
+                                  '프로젝트 완료',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            : OutlinedButton.icon(
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => ApplicantsModal(
+                                      projectId: _projectId() ?? '',
+                                      projectTitle: title,
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.group_add_outlined),
+                                label: const Text('신청 인원 확인'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF6F6CDF),
+                                  side: const BorderSide(color: Color(0xFF9B98EB)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                              ))
                         : ElevatedButton(
-                            onPressed: isOpen && !_isApplying && !_hasApplied
-                                ? _applyToProject
-                                : null,
+                            onPressed: canApply ? _applyToProject : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF9B98EB),
                               disabledBackgroundColor: Colors.grey.shade400,
@@ -719,7 +842,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                     ),
                                   )
                                 : Text(
-                                    _hasApplied ? '신청 완료' : '신청하기',
+                                    buttonText,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 16,

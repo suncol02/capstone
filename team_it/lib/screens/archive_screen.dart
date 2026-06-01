@@ -1,7 +1,7 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'archive_detail_screen.dart';
 
 class ArchiveScreen extends StatefulWidget {
   final bool showAppBar;
@@ -15,6 +15,7 @@ class ArchiveScreen extends StatefulWidget {
 class _ArchiveScreenState extends State<ArchiveScreen> {
   bool _isLoading = true;
   String _displayName = '사용자';
+  String _major = '정보 없음';
   List<Map<String, dynamic>> _completedProjects = [];
 
   @override
@@ -26,23 +27,19 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   Future<void> _loadArchive() async {
     final prefs = await SharedPreferences.getInstance();
     final email = prefs.getString('user_email') ?? '';
-    final archive = prefs.getStringList('completed_projects') ?? [];
+    final majorData = prefs.getString('user_major') ?? '';
+    
+    final archiveJson = prefs.getString('archived_activities') ?? '[]';
+    final archive = jsonDecode(archiveJson);
 
-    final projects = archive
-        .map((item) {
-          try {
-            final decoded = jsonDecode(item);
-            return decoded is Map<String, dynamic> ? decoded : null;
-          } catch (_) {
-            return null;
-          }
-        })
-        .whereType<Map<String, dynamic>>()
+    final projects = (archive is List ? archive : [])
+        .cast<Map<String, dynamic>>()
         .toList();
 
     if (mounted) {
       setState(() {
         _displayName = email.contains('@') ? email.split('@')[0] : (email.isEmpty ? '사용자' : email);
+        _major = majorData.trim().isNotEmpty ? majorData.trim() : '정보 없음';
         _completedProjects = projects;
         _isLoading = false;
       });
@@ -84,7 +81,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 18),
-          _ArchiveProfile(name: _displayName),
+          _ArchiveProfile(name: _displayName, major: _major),
           const SizedBox(height: 18),
           _ArchiveProgress(completedCount: _completedProjects.length),
           const SizedBox(height: 18),
@@ -110,8 +107,9 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
 
 class _ArchiveProfile extends StatelessWidget {
   final String name;
+  final String major;
 
-  const _ArchiveProfile({required this.name});
+  const _ArchiveProfile({required this.name, required this.major});
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +126,7 @@ class _ArchiveProfile extends StatelessWidget {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         Text(
-          '컴퓨터공학과',
+          major,
           style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
         ),
       ],
@@ -143,10 +141,9 @@ class _ArchiveProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final percent = (completedCount / 10).clamp(0.0, 1.0);
-
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -158,23 +155,19 @@ class _ArchiveProgress extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('프로젝트 완료율', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          Text(
-            '${(percent * 100).round()}%',
-            style: const TextStyle(color: Color(0xFFFF8F1F), fontWeight: FontWeight.bold),
+          const Text(
+            '프로젝트 완료 개수', 
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: percent,
-              minHeight: 6,
-              color: const Color(0xFFFFC46B),
-              backgroundColor: Colors.grey.shade200,
+          Text(
+            '$completedCount개',
+            style: const TextStyle(
+              color: Color(0xFFFF8F1F),
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -188,64 +181,56 @@ class _CompletedActivityTile extends StatelessWidget {
 
   const _CompletedActivityTile({required this.project});
 
-  String _text(List<String> keys, String fallback) {
-    for (final key in keys) {
-      final value = project[key];
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
-    }
-    return fallback;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final title = _text(['name', 'title'], '완료 프로젝트');
-    final period = _text(['period', 'date_range', 'application_period', 'recruitment_period'], '기간 정보 없음');
+    final title = project['name'] ?? project['title'] ?? '완료 프로젝트';
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ArchiveDetailScreen(activity: project),
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: Colors.brown.shade100,
-            child: const Icon(Icons.groups, color: Colors.brown),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  period,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 11),
-                ),
-              ],
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: Colors.black54),
-        ],
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: Colors.brown.shade100,
+              child: const Icon(Icons.groups, color: Colors.brown),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.black54),
+          ],
+        ),
       ),
     );
   }

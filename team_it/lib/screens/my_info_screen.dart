@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'archive_screen.dart';
@@ -29,14 +30,25 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   Future<void> _loadUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
     final email = prefs.getString('user_email') ?? '알 수 없음';
-    final completed = prefs.getInt('completed_projects') ?? 0;
+    
+    // ★ 수정: JSON 문자열로 저장되어 있으므로 String으로 읽고 파싱
+    int completedCount = 0;
+    try {
+      final completedJson = prefs.getString('archived_activities') ?? '[]';
+      final completedList = jsonDecode(completedJson);
+      completedCount = (completedList is List) ? completedList.length : 0;
+    } catch (e) {
+      print('[DEBUG] 완료 프로젝트 로드 실패: $e');
+      completedCount = 0;
+    }
+    
     final displayName = email.contains('@') ? email.split('@')[0] : email;
 
     if (mounted) {
       setState(() {
         _email = email;
         _displayName = displayName;
-        _completedProjects = completed;
+        _completedProjects = completedCount;
         _isLoading = false;
       });
     }
@@ -60,13 +72,12 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
           _ProfileSummaryCard(
             name: _displayName,
             email: _email,
-            completionPercent: _completionPercent,
+            completedProjects: _completedProjects,
             onTap: _openProfileDetail,
           ),
           const SizedBox(height: 16),
           _CompletionCard(
             completedProjects: _completedProjects,
-            percent: _completionPercent,
             onTap: _openArchive,
           ),
           const SizedBox(height: 16),
@@ -108,8 +119,6 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
     );
   }
 
-  double get _completionPercent => (_completedProjects / 10).clamp(0.0, 1.0);
-
   Future<void> _logout() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -139,6 +148,7 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
       await prefs.remove('username');
       await prefs.remove('user_profile_score');
       await prefs.remove('completed_projects');
+      await prefs.remove('archived_activities');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -147,18 +157,18 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
 
       // 로그인 화면으로 이동
       Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const LoginScreen(),
-      ),
-      (route) => false,
-    );
-  } catch (e) {
-    if (!mounted) return;
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LoginScreen(),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('로그아웃 실패: $e'),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('로그아웃 실패: $e'),
         ),
       );
     }
@@ -217,7 +227,6 @@ class _ProfileTitle extends StatelessWidget {
               ),
             ),
           ),
-
           IconButton(
             onPressed: onLogoutTap,
             icon: const Icon(
@@ -233,18 +242,16 @@ class _ProfileTitle extends StatelessWidget {
   }
 }
 
-
-
 class _ProfileSummaryCard extends StatelessWidget {
   final String name;
   final String email;
-  final double completionPercent;
+  final int completedProjects;
   final VoidCallback onTap;
 
   const _ProfileSummaryCard({
     required this.name,
     required this.email,
-    required this.completionPercent,
+    required this.completedProjects,
     required this.onTap,
   });
 
@@ -282,7 +289,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        _PercentBadge(percent: completionPercent),
+                        _CompletedBadge(completedProjects: completedProjects),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -304,10 +311,10 @@ class _ProfileSummaryCard extends StatelessWidget {
   }
 }
 
-class _PercentBadge extends StatelessWidget {
-  final double percent;
+class _CompletedBadge extends StatelessWidget {
+  final int completedProjects;
 
-  const _PercentBadge({required this.percent});
+  const _CompletedBadge({required this.completedProjects});
 
   @override
   Widget build(BuildContext context) {
@@ -318,7 +325,7 @@ class _PercentBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        '${(percent * 100).round()}%',
+        '$completedProjects개',
         style: const TextStyle(
           color: Color(0xFFFF9F2E),
           fontSize: 11,
@@ -331,12 +338,10 @@ class _PercentBadge extends StatelessWidget {
 
 class _CompletionCard extends StatelessWidget {
   final int completedProjects;
-  final double percent;
   final VoidCallback onTap;
 
   const _CompletionCard({
     required this.completedProjects,
-    required this.percent,
     required this.onTap,
   });
 
@@ -352,7 +357,7 @@ class _CompletionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '프로젝트 완료율',
+                '프로젝트 완료 갯수',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
@@ -360,7 +365,7 @@ class _CompletionCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${(percent * 100).round()}%',
+                      '$completedProjects개', // ★ 수정: 갯수만 표시
                       style: const TextStyle(
                         color: Color(0xFFFF8F1F),
                         fontSize: 15,
@@ -368,27 +373,8 @@ class _CompletionCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    '$completedProjects/10개',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   const Icon(Icons.chevron_right, size: 18, color: Colors.black54),
                 ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  minHeight: 8,
-                  value: percent,
-                  color: const Color(0xFFFFC46B),
-                  backgroundColor: Colors.grey.shade200,
-                ),
               ),
             ],
           ),
@@ -469,7 +455,6 @@ class _QuickActionButton extends StatelessWidget {
     );
   }
 }
-
 
 class _MyActivityCard extends StatelessWidget {
   final int completedProjects;

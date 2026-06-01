@@ -9,7 +9,6 @@ import 'archive_screen.dart';
 import 'project_detail_screen.dart';
 import 'chat_screen.dart';
 
-// API 기본 URL (백엔드 서버 주소로 변경 필요)
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
 class MainScreen extends StatefulWidget {
@@ -20,13 +19,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // 현재 선택된 하단 탭 인덱스
   int _selectedIndex = 0;
-
-  // ProjectList의 상태에 접근하기 위한 GlobalKey
   final GlobalKey<_ProjectListState> _projectListKey = GlobalKey();
-
-  // 각 탭에 대응하는 화면 리스트
   late final List<Widget> _screens;
 
   @override
@@ -94,29 +88,26 @@ class _MainScreenState extends State<MainScreen> {
                       ),
               ],
             ),
-
-      // 현재 인덱스에 맞는 화면 표시
       body: _screens[_selectedIndex],
-
-      // 하단 내비게이션 바 (언더바)
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
           });
+          if (index == 0) {
+            _refreshProjectList();
+          }
         },
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed, // 아이콘 고정
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: '프로젝트'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
           BottomNavigationBarItem(icon: Icon(Icons.archive), label: '아카이브'),
         ],
       ),
-
-      // 팀원 모집 글쓰기 버튼
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
               onPressed: () {
@@ -135,7 +126,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// 프로젝트 리스트 위젯 (재사용 가능하게 분리)
 class ProjectList extends StatefulWidget {
   final String category;
   const ProjectList({super.key, required this.category});
@@ -147,6 +137,7 @@ class ProjectList extends StatefulWidget {
 class _ProjectListState extends State<ProjectList> {
   bool _isLoading = true;
   List<dynamic> _projects = [];
+  List<String> _archivedIds = [];
   String? _error;
   String _searchQuery = '';
   String _selectedCategory = '팀플';
@@ -161,11 +152,9 @@ class _ProjectListState extends State<ProjectList> {
 
   Future<void> _loadProjects() async {
     try {
-      // SharedPreferences에서 토큰 조회
       final prefs = await SharedPreferences.getInstance();
       final String? token = prefs.getString('auth_token');
 
-      // 토큰이 없으면 로그인 화면으로 이동
       if (token == null) {
         if (mounted) {
           Navigator.pushReplacement(
@@ -176,7 +165,12 @@ class _ProjectListState extends State<ProjectList> {
         return;
       }
 
-      // 전체 탭에서는 모든 프로젝트를 조회하고, 필요하면 카테고리별 조회도 지원
+      final archiveJson = prefs.getString('archived_activities') ?? '[]';
+      final List<dynamic> archiveList = jsonDecode(archiveJson);
+      final List<String> archivedIds = archiveList.map((item) {
+        return (item['id'] ?? '').toString();
+      }).toList();
+
       final uri = widget.category == '전체'
           ? Uri.parse('$API_BASE_URL/projects/')
           : Uri.parse(
@@ -191,19 +185,16 @@ class _ProjectListState extends State<ProjectList> {
         },
       );
 
-      print('[DEBUG] 카테고리: ${widget.category}, 상태 코드: ${response.statusCode}');
-      print('[DEBUG] 응답: ${response.body}');
-
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         if (mounted) {
           setState(() {
             _projects = data;
+            _archivedIds = archivedIds;
             _isLoading = false;
           });
         }
       } else if (response.statusCode == 401) {
-        // 인증 실패 - 로그인 화면으로 이동
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -219,7 +210,6 @@ class _ProjectListState extends State<ProjectList> {
         }
       }
     } catch (e) {
-      print('[DEBUG] 예외 발생: $e');
       if (mounted) {
         setState(() {
           _error = '오류: $e';
@@ -269,13 +259,11 @@ class _ProjectListState extends State<ProjectList> {
   bool _isOpen(dynamic project) {
     final current = _currentCount(project);
     final max = _maxCount(project);
-    print('[DEBUG] 모집 상태: $current / $max');
     return current < max;
   }
 
   bool _isClosingSoon(dynamic project) {
     final remaining = _maxCount(project) - _currentCount(project);
-    print('[DEBUG] 마감 임박 체크: remaining=$remaining (임박: ${remaining > 0 && remaining <= 2})');
     return remaining > 0 && remaining <= 2;
   }
 
@@ -294,6 +282,11 @@ class _ProjectListState extends State<ProjectList> {
 
   List<dynamic> _projectsForCategory() {
     return _projects.where((project) {
+      final String projectId = (project['id'] ?? project['pk'] ?? '').toString();
+      if (_archivedIds.contains(projectId)) {
+        return false;
+      }
+
       final category = _projectCategory(project);
       if (_selectedCategory == '팀플') {
         return category.isEmpty || category == '팀플' || category == '수업 팀플';
@@ -386,7 +379,7 @@ class _ProjectListState extends State<ProjectList> {
                   style: TextStyle(color: Colors.grey.shade800, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
-                if (_projects.isEmpty)
+                if (categoryProjects.isEmpty)
                   const Center(
                     child: Padding(
                       padding: EdgeInsets.only(top: 80),
@@ -422,16 +415,14 @@ class _ProjectListState extends State<ProjectList> {
                         isClosingSoon: _isClosingSoon(project),
                         requirements: _requirements(project),
                         onTap: () async {
-                          final changed = await Navigator.push<bool>(
+                          await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
                               builder: (context) =>
                                   ProjectDetailScreen(project: project),
                             ),
                           );
-                          if (changed == true) {
-                            _loadProjects();
-                          }
+                          _loadProjects();
                         },
                       );
                     },
@@ -680,7 +671,6 @@ class _ProjectGridCardState extends State<_ProjectGridCard> {
 
   Future<void> toggleFavorite() async {
     final prefs = await SharedPreferences.getInstance();
-
     List<String> favorites = prefs.getStringList('favorite_projects') ?? [];
 
     if (favorites.contains(widget.title)) {
@@ -692,7 +682,6 @@ class _ProjectGridCardState extends State<_ProjectGridCard> {
     }
 
     await prefs.setStringList('favorite_projects', favorites);
-
     setState(() {});
   }
 
@@ -704,7 +693,6 @@ class _ProjectGridCardState extends State<_ProjectGridCard> {
 
   Future<void> loadFavorite() async {
     final prefs = await SharedPreferences.getInstance();
-
     List<String> favorites = prefs.getStringList('favorite_projects') ?? [];
 
     setState(() {
