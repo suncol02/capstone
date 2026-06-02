@@ -422,7 +422,7 @@ class _ProjectListState extends State<ProjectList> {
                                   ProjectDetailScreen(project: project),
                             ),
                           );
-                          _loadProjects();
+                          await _loadProjects();
                         },
                       );
                     },

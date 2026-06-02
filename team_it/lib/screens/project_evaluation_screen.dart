@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+
+const String API_BASE_URL = 'http://team-it.iptime.org:8000/api'; 
 
 class ProjectEvaluationScreen extends StatefulWidget {
   final Map<String, dynamic> project;
@@ -54,36 +57,76 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
     return '모집 기간 정보가 없습니다.';
   }
 
-  Future<void> _completeAndArchive() async {
+  bool _isSubmitting = false;
+
+Future<void> _completeAndArchive() async {
+  if (_isSubmitting) return;
+  setState(() => _isSubmitting = true);
+
+  try {
     final prefs = await SharedPreferences.getInstance();
-    
-    final archiveJson = prefs.getString('archived_activities') ?? '[]';
-    List<dynamic> archiveList = jsonDecode(archiveJson);
+    final token = prefs.getString('auth_token');
+    final projectId = widget.project['id'] ?? widget.project['pk'];
 
-    final newArchiveItem = {
-      'id': widget.project['id'] ?? widget.project['pk'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      'title': widget.project['name'] ?? widget.project['title'] ?? '프로젝트',
-      'period': _getProjectPeriod(),
-      'description': widget.project['description'] ?? '프로젝트 설명',
-      'tags': _selectedTags.isNotEmpty ? _selectedTags : ['👍 소통이 잘 돼요', '😎 피드백이 정확해요'],
-    };
+    if (token == null || projectId == null) return;
 
-    archiveList.insert(0, newArchiveItem);
-    
-    await prefs.setString('archived_activities', jsonEncode(archiveList));
-    
-    final completedJson = prefs.getString('completed_projects') ?? '[]';
-    List<dynamic> completedList = jsonDecode(completedJson);
-    completedList.insert(0, newArchiveItem);
-    await prefs.setString('completed_projects', jsonEncode(completedList));
+    final feedback = _selectedTags.join(', ');
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('프로젝트가 완료되어 아카이브에 등록되었습니다.')),
+    final response = await http.post(
+      Uri.parse('$API_BASE_URL/projects/$projectId/evaluate/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      },
+      body: jsonEncode({'feedback': feedback}),
     );
 
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    if (!mounted) return;
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      final allSubmitted = data['all_members_submitted'] ?? false;
+
+      if (allSubmitted) {
+        // 모든 멤버 제출 완료 → 로컬 아카이브 저장 후 이동
+        final archiveJson = prefs.getString('archived_activities') ?? '[]';
+        List<dynamic> archiveList = jsonDecode(archiveJson);
+        archiveList.insert(0, {
+          'id': projectId.toString(),
+          'title': widget.project['name'] ?? widget.project['title'] ?? '프로젝트',
+          'period': _getProjectPeriod(),
+          'description': widget.project['description'] ?? '',
+          'tags': _selectedTags.isNotEmpty ? _selectedTags : [],
+        });
+        await prefs.setString('archived_activities', jsonEncode(archiveList));
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('모든 팀원이 평가를 완료했습니다! 아카이브에 등록되었습니다.')),
+        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
+        final submitted = data['submitted_members_count'] ?? 0;
+        final required = data['required_members_count'] ?? 0;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('평가를 제출했습니다. ($submitted/$required 명 완료)')),
+        );
+        Navigator.pop(context);
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('평가 제출에 실패했습니다.')),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('오류가 발생했습니다: $e')),
+      );
+    }
+  } finally {
+    if (mounted) setState(() => _isSubmitting = false);
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +197,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: _completeAndArchive,
+                onPressed: _isSubmitting ? null : _completeAndArchive,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF9B98EB),
                   shape: RoundedRectangleBorder(

@@ -30,6 +30,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     _loadLocalProjectMeta();
     _checkApplicationStatus();
     _saveRecentlyViewedProject();
+    _refreshProjectData();
   }
 
   int _parseInt(dynamic value, {required int defaultValue}) {
@@ -203,6 +204,139 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
+  Future<void> _refreshProjectData() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('auth_token');
+  final projectId = _projectId();
+  if (token == null || projectId == null) return;
+
+  final response = await http.get(
+    Uri.parse('$API_BASE_URL/projects/$projectId/'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Token $token',
+    },
+  );
+
+  if (response.statusCode == 200 && mounted) {
+  final data = jsonDecode(utf8.decode(response.bodyBytes));
+  setState(() {
+    widget.project['current_participants'] = data['current_participants']; 
+    widget.project['current_members'] = data['current_members'];
+    widget.project['member_count'] = data['member_count'];
+    widget.project['members'] = data['members'];
+    widget.project['status'] = data['status'];
+    });
+  }
+}
+
+// 프로젝트 완료 API 호출
+Future<void> _completeProject() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('auth_token');
+  final projectId = _projectId();
+  if (token == null || projectId == null) return;
+
+  final response = await http.post(
+    Uri.parse('$API_BASE_URL/projects/$projectId/complete/'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Token $token',
+    },
+  );
+
+  if (response.statusCode == 200 && mounted) {
+    final data = jsonDecode(utf8.decode(response.bodyBytes));
+    setState(() {
+      widget.project['status'] = data['project_status'];
+    });
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProjectEvaluationScreen(project: widget.project),
+      ),
+    );
+  }
+}
+
+Widget _buildBottomButton(bool isFull, String title, bool canApply, String buttonText) {
+  final projectStatus = widget.project['status'] ?? '';
+  final isCompleted = projectStatus == '완료';
+
+  // 프로젝트 완료 상태 → 팀장/팀원 모두 평가하기 버튼
+  if (isCompleted && (_isOwner || _applicationStatus == 'accepted')) {
+    return ElevatedButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProjectEvaluationScreen(project: widget.project),
+          ),
+        );
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF9B98EB),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: const Text(
+        '평가하기',
+        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  // 팀장
+  if (_isOwner) {
+    return isFull
+        ? ElevatedButton(
+            onPressed: _completeProject,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF9B98EB),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text(
+              '프로젝트 완료',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+          )
+        : OutlinedButton.icon(
+            onPressed: () async {
+              await showDialog(
+                context: context,
+                builder: (context) => ApplicantsModal(
+                  projectId: _projectId() ?? '',
+                  projectTitle: title,
+                ),
+              );
+              if (mounted) await _refreshProjectData();
+            },
+            icon: const Icon(Icons.group_add_outlined),
+            label: const Text('신청 인원 확인'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF6F6CDF),
+              side: const BorderSide(color: Color(0xFF9B98EB)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          );
+  }
+
+  // 팀원
+  return ElevatedButton(
+    onPressed: canApply ? _applyToProject : null,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFF9B98EB),
+      disabledBackgroundColor: Colors.grey.shade400,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
+    child: _isApplying
+        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+        : Text(buttonText, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+  );
+}
+
   Future<void> _saveRecentlyViewedProject() async {
     final prefs = await SharedPreferences.getInstance();
     final projectId = _projectId();
@@ -367,7 +501,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         setState(() {
           _hasApplied = true;
           _applicationStatus = 'pending';
-          widget.project['current_participants'] = currentCount + 1;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -773,83 +906,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   SizedBox(
                     width: double.infinity,
                     height: 56,
-                    child: _isOwner
-                        ? (isFull // ★ 인원이 다 찼을 때
-                            ? ElevatedButton(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ProjectEvaluationScreen(
-                                        project: widget.project,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF9B98EB),
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                child: const Text(
-                                  '프로젝트 완료',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              )
-                            : OutlinedButton.icon(
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => ApplicantsModal(
-                                      projectId: _projectId() ?? '',
-                                      projectTitle: title,
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.group_add_outlined),
-                                label: const Text('신청 인원 확인'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF6F6CDF),
-                                  side: const BorderSide(color: Color(0xFF9B98EB)),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                              ))
-                        : ElevatedButton(
-                            onPressed: canApply ? _applyToProject : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF9B98EB),
-                              disabledBackgroundColor: Colors.grey.shade400,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: _isApplying
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(
-                                    buttonText,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                          ),
+                    child: _buildBottomButton(isFull, title, canApply, buttonText),
                   ),
                 ],
               ),

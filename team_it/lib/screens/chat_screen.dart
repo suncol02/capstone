@@ -406,9 +406,17 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() => _isSending = true);
       _channel!.sink.add(jsonEncode({'content': text}));
       controller.clear();
+
+      final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+      _appendMessage({
+        'id': tempId,
+        'content': text,
+        'sender': {'username': _myUsername},
+      });
+
       setState(() => _isSending = false);
       return;
-    }
+  }
 
     try {
       setState(() => _isSending = true);

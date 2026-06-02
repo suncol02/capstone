@@ -140,6 +140,7 @@ class _ApplicantsModalState extends State<ApplicantsModal> {
           const SnackBar(content: Text('신청자를 수락했습니다.')),
         );
         _loadApplicants();
+        Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('수락에 실패했습니다.')),
