@@ -55,11 +55,11 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
       print('상태코드: ${response.statusCode}');
       print('응답본문: ${response.body}');
 
+
       if (response.statusCode == 200 && mounted) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         final List<dynamic> applicants = decoded is List ? decoded : [];
-
-        // owner 정보 추가
+        
         final owner = widget.project['owner'];
         final ownerId = (owner is Map ? owner['id'] : null)?.toString() ?? '';
         final ownerName = owner is Map
@@ -74,13 +74,18 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         // owner 추가 (본인 제외)
         addedIds.add(ownerId);
 
+        
+      print('[DEBUG] myUserId: "$myUserId"');
+      print('[DEBUG] ownerId: "$ownerId"');
+      print('[DEBUG] 같은가: ${ownerId == myUserId}');
+
         if (ownerId.isNotEmpty && ownerId != myUserId) {
           members.add({
             'id': int.tryParse(ownerId) ?? 0,
             'name': ownerName,
             'selectedTags': <String>[],
           });
-        }
+        } 
 
         // 수락된 팀원 추가 (본인 제외)
         for (var app in applicants) {
@@ -132,7 +137,9 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
           _isLoading = false;
         });
       } else {
-        setState(() => _isLoading = false);
+          print('[DEBUG] applicants 실패: ${response.statusCode}');
+          print('[DEBUG] 응답 내용: ${response.body}');
+          if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
       print('[DEBUG] 멤버 로드 실패: $e');
