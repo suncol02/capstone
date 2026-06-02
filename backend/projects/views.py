@@ -165,7 +165,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
         app.status = 'accepted'
         app.save()
 
-        return Response({'message': '신청자를 수락했습니다.'}, status=status.HTTP_200_OK)
+        chat_rooms = project.chat_rooms.all()
+        for chat_room in chat_rooms:
+            chat_room.members.add(app.user)
+
+        return Response(
+            {
+                'message': '신청자를 수락했습니다.',
+                'added_chat_rooms': chat_rooms.count(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=['post'], url_path=r'applicants/(?P<user_id>[^/.]+)/reject')
     def reject_applicant(self, request, pk=None, user_id=None):
