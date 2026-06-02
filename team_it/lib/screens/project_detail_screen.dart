@@ -128,81 +128,32 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Future<void> _checkApplicationStatus() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final currentUserEmail = prefs.getString('user_email') ?? '';
-      final currentUserId = prefs.getString('user_id') ?? '';
-      final token = prefs.getString('auth_token');
-      final projectId = _projectId();
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    final projectId = _projectId();
+    if (token == null || projectId == null) return;
 
-      if (token == null || projectId == null) return;
+    final response = await http.get(
+      Uri.parse('$API_BASE_URL/projects/$projectId/my_application/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      },
+    ).timeout(const Duration(seconds: 5));
 
-      final endpoints = [
-        '$API_BASE_URL/projects/$projectId/applicants/',
-        '$API_BASE_URL/projects/$projectId/applications/',
-        '$API_BASE_URL/accounts/applications/?project=$projectId',
-      ];
-
-      http.Response? response;
-      for (var endpoint in endpoints) {
-        try {
-          final res = await http.get(
-            Uri.parse(endpoint),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Token $token',
-            },
-          ).timeout(const Duration(seconds: 5));
-
-          if (res.statusCode == 200) {
-            response = res;
-            break;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-
-      if (response != null && response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        final List<dynamic> applicants =
-            decoded is List ? decoded : decoded['results'] ?? decoded['data'] ?? [];
-
-        bool found = false;
-        String status = 'none';
-
-        for (var app in applicants) {
-          final appEmail = app['email'] ?? app['user_email'] ?? '';
-          final appId = app['user_id']?.toString() ?? app['user']?.toString() ?? app['id']?.toString() ?? '';
-
-          if (appEmail == currentUserEmail || (currentUserId.isNotEmpty && appId == currentUserId)) {
-            found = true;
-            final appStatus = app['status'] ?? app['approval_status'] ?? 'pending';
-
-            if (appStatus == 'accepted' || appStatus == 'approved') {
-              status = 'accepted';
-            } else if (appStatus == 'rejected') {
-              status = 'rejected';
-            } else {
-              status = 'pending';
-            }
-            break;
-          }
-        }
-
-        if (mounted) {
-          setState(() {
-            if (found) {
-              _applicationStatus = status;
-              _hasApplied = (status == 'pending' || status == 'accepted');
-            }
-          });
-        }
-      }
-    } catch (e) {
-      print('[DEBUG] 지원 현황 검증 오류: $e');
+    if (response.statusCode == 200 && mounted) {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final appStatus = decoded['status'] ?? 'none';
+      setState(() {
+        _applicationStatus = appStatus;
+        _hasApplied = (appStatus == 'pending' || appStatus == 'accepted');
+      });
     }
+  } catch (e) {
+    print('[DEBUG] 지원 현황 검증 오류: $e');
   }
+}
 
   Future<void> _refreshProjectData() async {
   final prefs = await SharedPreferences.getInstance();
