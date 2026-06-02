@@ -52,6 +52,9 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         },
       );
 
+      print('상태코드: ${response.statusCode}');
+      print('응답본문: ${response.body}');
+
       if (response.statusCode == 200 && mounted) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         final List<dynamic> applicants = decoded is List ? decoded : [];
@@ -66,8 +69,11 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
             : '팀장';
 
         List<Map<String, dynamic>> members = [];
+        final Set<String> addedIds = {};
 
         // owner 추가 (본인 제외)
+        addedIds.add(ownerId);
+
         if (ownerId.isNotEmpty && ownerId != myUserId) {
           members.add({
             'id': int.tryParse(ownerId) ?? 0,
@@ -78,16 +84,48 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
 
         // 수락된 팀원 추가 (본인 제외)
         for (var app in applicants) {
-          if (app['status'] != 'accepted' && app['status'] != 'joined') continue;
-          final memberId = (app['user_id'] ?? app['id'] ?? '').toString();
+          if (app['status'] != 'accepted' &&
+              app['status'] != 'joined') {
+            continue;
+          }
+
+          final user = app['user'];
+
+          final memberId = (
+            user?['id'] ??
+            app['user_id'] ??
+            app['id']
+          ).toString();
+
+          // 본인 제외
           if (memberId == myUserId) continue;
-          final name = app['name'] ?? app['username'] ?? app['email'] ?? '팀원';
+
+          // 중복 제거
+          if (addedIds.contains(memberId)) continue;
+
+          addedIds.add(memberId);
+
+          final memberName =
+              user?['first_name'] ??
+              user?['username'] ??
+              user?['email'] ??
+              app['name'] ??
+              app['username'] ??
+              app['email'] ??
+              '사용자';
+
           members.add({
             'id': int.tryParse(memberId) ?? 0,
-            'name': name,
+            'name': memberName.toString(),
             'selectedTags': <String>[],
           });
         }
+
+        print('===== 평가 대상 =====');
+        for (var m in members) {
+          print('${m['id']} / ${m['name']}');
+        }
+                
 
         setState(() {
           _members = members;
@@ -101,6 +139,8 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  
 
   Future<void> _checkAlreadySubmitted() async {
     final prefs = await SharedPreferences.getInstance();
