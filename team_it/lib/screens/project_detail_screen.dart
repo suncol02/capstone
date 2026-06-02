@@ -263,7 +263,11 @@ Widget _buildBottomButton(bool isFull, String title, bool canApply, String butto
   final projectStatus = widget.project['status'] ?? '';
   final isCompleted = projectStatus == '완료';
 
-  // 프로젝트 완료 상태 → 팀장/팀원 모두 평가하기 버튼
+  print('[DEBUG] projectStatus: $projectStatus');
+  print('[DEBUG] isCompleted: $isCompleted');
+  print('[DEBUG] _applicationStatus: $_applicationStatus');
+  print('[DEBUG] _isOwner: $_isOwner');
+
   if (isCompleted && (_isOwner || _applicationStatus == 'accepted')) {
     return ElevatedButton(
       onPressed: () {
@@ -286,7 +290,6 @@ Widget _buildBottomButton(bool isFull, String title, bool canApply, String butto
     );
   }
 
-  // 팀장
   if (_isOwner) {
     return isFull
         ? ElevatedButton(
