@@ -52,24 +52,26 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
       });
     }
   } else {
-    final archiveJson = prefs.getString('archived_activities') ?? '[]';
-    final archive = jsonDecode(archiveJson);
-    final projects = (archive is List ? archive : [])
-        .cast<Map<String, dynamic>>()
-        .toList();
+    final response = await http.get(
+      Uri.parse('$API_BASE_URL/archives/'),
+      headers: {'Authorization': 'Token $token'},
+    );
 
-    final firstName = prefs.getString('first_name') ?? '';  
-    final displayName = firstName.isNotEmpty               
+    final firstName = prefs.getString('first_name') ?? '';
+    final displayName = firstName.isNotEmpty
         ? firstName
         : (email.contains('@') ? email.split('@')[0] : (email.isEmpty ? '사용자' : email));
 
-    if (mounted) {
+    if (response.statusCode == 200 && mounted) {
+      final List<dynamic> data = jsonDecode(response.body);
       setState(() {
-        _displayName = displayName;  
+        _displayName = displayName;
         _major = majorData.trim().isNotEmpty ? majorData.trim() : '정보 없음';
-        _completedProjects = projects;
+        _completedProjects = data.cast<Map<String, dynamic>>();
         _isLoading = false;
       });
+    } else {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }
@@ -211,7 +213,8 @@ class _CompletedActivityTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = project['name'] ?? project['title'] ?? '완료 프로젝트';
+    final projectDetail = project['project_detail'] as Map<String, dynamic>?;
+    final title = projectDetail?['name'] ?? projectDetail?['title']?? project['name'] ?? project['title'] ?? '완료 프로젝트';
 
     return GestureDetector(
       onTap: () {

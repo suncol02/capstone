@@ -7,6 +7,9 @@ import 'package:team_it/screens/favorite_screen.dart';
 import 'package:team_it/screens/recently_viewed_screen.dart';
 import 'package:team_it/screens/my_posts_screen.dart';
 import 'package:team_it/screens/login_screen.dart';
+import 'package:http/http.dart' as http;
+
+const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
 class MyInfoScreen extends StatefulWidget {
   const MyInfoScreen({super.key});
@@ -28,33 +31,38 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   }
 
   Future<void> _loadUserInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    final email = prefs.getString('user_email') ?? '알 수 없음';
+  final prefs = await SharedPreferences.getInstance();
+  final email = prefs.getString('user_email') ?? '알 수 없음';
+  final token = prefs.getString('auth_token');
 
-    int completedCount = 0;
-    try {
-      final completedJson = prefs.getString('archived_activities') ?? '[]';
-      final completedList = jsonDecode(completedJson);
-      completedCount = (completedList is List) ? completedList.length : 0;
-    } catch (e) {
-      print('[DEBUG] 완료 프로젝트 로드 실패: $e');
-      completedCount = 0;
+  int completedCount = 0;
+  try {
+    final response = await http.get(
+      Uri.parse('$API_BASE_URL/archives/'),
+      headers: {'Authorization': 'Token $token'},
+    );
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      completedCount = data.length;
     }
-    
-    final firstName = prefs.getString('first_name') ?? '';
-    final displayName = firstName.isNotEmpty
-        ? firstName
-        : (email.contains('@') ? email.split('@')[0] : email);
-
-    if (mounted) {
-      setState(() {
-        _email = email;
-        _displayName = displayName;
-        _completedProjects = completedCount;
-        _isLoading = false;
-      });
-    }
+  } catch (e) {
+    print('[DEBUG] 완료 프로젝트 로드 실패: $e');
   }
+
+  final firstName = prefs.getString('first_name') ?? '';
+  final displayName = firstName.isNotEmpty
+      ? firstName
+      : (email.contains('@') ? email.split('@')[0] : email);
+
+  if (mounted) {
+    setState(() {
+      _email = email;
+      _displayName = displayName;
+      _completedProjects = completedCount;
+      _isLoading = false;
+    });
+  }
+}
 
   @override
   Widget build(BuildContext context) {

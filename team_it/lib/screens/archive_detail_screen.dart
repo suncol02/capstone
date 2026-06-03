@@ -1,5 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
 class ArchiveDetailScreen extends StatefulWidget {
   final Map<String, dynamic> activity;
@@ -12,11 +16,13 @@ class ArchiveDetailScreen extends StatefulWidget {
 
 class _ArchiveDetailScreenState extends State<ArchiveDetailScreen> {
   String _major = '정보 없음';
+  List<dynamic> _tags = [];
 
   @override
   void initState() {
     super.initState();
     _loadUserMajor();
+    _loadTags();
   }
 
   Future<void> _loadUserMajor() async {
@@ -29,26 +35,42 @@ class _ArchiveDetailScreenState extends State<ArchiveDetailScreen> {
     }
   }
 
+  Future<void> _loadTags() async {
+    final projectDetail = widget.activity['project_detail'] as Map<String, dynamic>?;
+    final projectId = projectDetail?['id'] ?? widget.activity['project'];
+    if (projectId == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    if (token == null) return;
+
+    final response = await http.get(
+      Uri.parse('$API_BASE_URL/projects/$projectId/my_tags/'),
+      headers: {'Authorization': 'Token $token'},
+    );
+
+    if (response.statusCode == 200 && mounted) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      setState(() {
+        _tags = data['tags'] ?? [];
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final projectDetail = widget.activity['project_detail'] as Map<String, dynamic>?;
 
-    final String title = widget.activity['title']
-        ?? widget.activity['name']
+    // ✅ project_detail에서 이름 우선 읽기
+    final String title = projectDetail?['name']
         ?? projectDetail?['title']
-        ?? projectDetail?['name']
+        ?? widget.activity['title']
+        ?? widget.activity['name']
         ?? '완료 프로젝트';
 
-    final String description = widget.activity['description']
-        ?? projectDetail?['description']
+    final String description = projectDetail?['description']
+        ?? widget.activity['description']
         ?? '상세 설명 정보가 없습니다.';
-
-    final rawTags = widget.activity['tags'];
-    final List<dynamic> tags = rawTags is List
-        ? rawTags
-        : rawTags is String && rawTags.isNotEmpty
-            ? rawTags.split(',').map((t) => t.trim()).toList()
-            : [];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -108,24 +130,26 @@ class _ArchiveDetailScreenState extends State<ArchiveDetailScreen> {
             const SizedBox(height: 24),
             const Text('획득한 태그', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 10,
-              children: tags.map((tag) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFEBEBEB)),
+            _tags.isEmpty
+                ? const Text('획득한 태그가 없습니다.', style: TextStyle(fontSize: 13, color: Colors.black54))
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 10,
+                    children: _tags.map((tag) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFEBEBEB)),
+                        ),
+                        child: Text(
+                          tag.toString(),
+                          style: const TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                      );
+                    }).toList(),
                   ),
-                  child: Text(
-                    tag.toString(),
-                    style: const TextStyle(fontSize: 13, color: Colors.black87),
-                  ),
-                );
-              }).toList(),
-            ),
             const SizedBox(height: 28),
             const Text('증빙 파일 또는 링크', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
             const SizedBox(height: 12),
