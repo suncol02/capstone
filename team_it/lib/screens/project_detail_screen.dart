@@ -205,7 +205,9 @@ Future<void> _completeProject() async {
       MaterialPageRoute(
         builder: (context) => ProjectEvaluationScreen(project: widget.project),
       ),
-    );
+    ).then((_) {
+      if (mounted) _refreshProjectData();
+  });
   }
 }
 

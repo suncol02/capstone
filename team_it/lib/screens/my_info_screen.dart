@@ -30,8 +30,7 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   Future<void> _loadUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
     final email = prefs.getString('user_email') ?? '알 수 없음';
-    
-    // ★ 수정: JSON 문자열로 저장되어 있으므로 String으로 읽고 파싱
+
     int completedCount = 0;
     try {
       final completedJson = prefs.getString('archived_activities') ?? '[]';
@@ -42,7 +41,10 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
       completedCount = 0;
     }
     
-    final displayName = email.contains('@') ? email.split('@')[0] : email;
+    final firstName = prefs.getString('first_name') ?? '';
+    final displayName = firstName.isNotEmpty
+        ? firstName
+        : (email.contains('@') ? email.split('@')[0] : email);
 
     if (mounted) {
       setState(() {

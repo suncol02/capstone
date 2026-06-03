@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:team_it/screens/main_screen.dart';
 
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
@@ -238,13 +239,18 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         setState(() => _hasSubmitted = true);
 
         if (allSubmitted) {
-          // 내가 받은 태그 조회 후 아카이브 저장
           await _saveToArchive(token, projectId);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('모든 팀원이 평가를 완료했습니다! 아카이브에 등록되었습니다.')),
           );
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          await Future.delayed(const Duration(seconds: 2));
+          if (!mounted) return;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+            (route) => false,
+          );
+    
         } else {
           final submitted = data['submitted_members_count'] ?? 0;
           final required = data['required_members_count'] ?? 0;

@@ -63,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final String email = responseData['email'];
         final String? department = responseData['department']; // 학과 가져오기
         final String? userId = responseData['id']?.toString() ?? responseData['user_id']?.toString();
+        final String? firstName = responseData['first_name']?.toString(); 
 
         // SharedPreferences에 토큰 저장
         final prefs = await SharedPreferences.getInstance();
@@ -73,6 +74,9 @@ class _LoginScreenState extends State<LoginScreen> {
         }
         if (userId != null) {
           await prefs.setString('user_id', userId);
+        }
+        if (firstName != null && firstName.isNotEmpty) { 
+          await prefs.setString('first_name', firstName);
         }
 
         // 메인 화면으로 이동
