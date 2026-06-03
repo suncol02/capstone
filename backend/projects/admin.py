@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Project, ChatRoom, Message, Recruitment, Archive
+from .models import Project, ChatRoom, Message, Recruitment, Archive, ProjectEvaluation
 
 
 @admin.register(Project)
@@ -61,3 +61,12 @@ class ArchiveAdmin(admin.ModelAdmin):
     list_filter = ['result', 'archived_at']
     search_fields = ['user__email', 'project__title', 'role']
     readonly_fields = ['archived_at']
+
+
+@admin.register(ProjectEvaluation)
+class ProjectEvaluationAdmin(admin.ModelAdmin):
+    """프로젝트 평가 관리 어드민"""
+    list_display = ['user', 'project', 'score', 'submitted_at', 'updated_at']
+    list_filter = ['submitted_at', 'updated_at', 'score']
+    search_fields = ['user__email', 'project__title', 'feedback']
+    readonly_fields = ['submitted_at', 'updated_at']

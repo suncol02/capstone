@@ -5,7 +5,7 @@ JSON 형식으로 변환하기 위한 Serializer들을 정의합니다.
 """
 
 from rest_framework import serializers
-from .models import Project, ChatRoom, Message, Archive, Application
+from .models import Project, ChatRoom, Message, Archive, Application, ProjectEvaluation
 from accounts.models import User
 
 
@@ -84,13 +84,14 @@ class ProjectSerializer(serializers.ModelSerializer):
     chat_rooms = ChatRoomListSerializer(many=True, read_only=True)
     name = serializers.CharField(source='title', read_only=True)  # title을 name으로 매핑
     requirements_list = serializers.SerializerMethodField()
+    current_participants = serializers.SerializerMethodField()
     
     class Meta:
         model = Project
         fields = [
             'id', 'title', 'name', 'description', 'category', 'owner', 
             'status', 'recruit_count', 'requirements', 'requirements_list',
-            'chat_rooms', 'created_at', 'updated_at'
+            'current_participants', 'chat_rooms', 'created_at', 'updated_at'
         ]
         read_only_fields = ['owner', 'created_at', 'updated_at']
     
@@ -100,6 +101,11 @@ class ProjectSerializer(serializers.ModelSerializer):
             return [req.strip() for req in obj.requirements.split(',')]
         return []
 
+    def get_current_participants(self, obj):
+        """현재 참가 인원 수 반환 (수락/참가완료 상태)"""
+        accepted_count = obj.applications.filter(status__in=['accepted', 'joined']).count()
+        return accepted_count + 1
+
 
 class ProjectListSerializer(serializers.ModelSerializer):
     """프로젝트 목록용 직렬화"""
@@ -107,19 +113,25 @@ class ProjectListSerializer(serializers.ModelSerializer):
     chat_room_count = serializers.SerializerMethodField()
     name = serializers.CharField(source='title', read_only=True)  # title을 name으로 매핑
     requirements_list = serializers.SerializerMethodField()
+    current_participants = serializers.SerializerMethodField()
     
     class Meta:
         model = Project
         fields = [
             'id', 'title', 'name', 'description', 'category', 'owner', 
             'status', 'recruit_count', 'requirements', 'requirements_list',
-            'chat_room_count', 'created_at', 'updated_at'
+            'current_participants', 'chat_room_count', 'created_at', 'updated_at'
         ]
         read_only_fields = ['owner', 'created_at', 'updated_at']
     
     def get_chat_room_count(self, obj):
         """채팅방 수 반환"""
         return obj.chat_rooms.count()
+
+    def get_current_participants(self, obj):
+        """현재 참가 인원 수 반환 (수락/참가완료 상태)"""
+        accepted_count = obj.applications.filter(status__in=['accepted', 'joined']).count()
+        return accepted_count + 1
     
     def get_requirements_list(self, obj):
         """요구사항을 리스트로 반환"""
@@ -192,3 +204,25 @@ class ApplicationSerializer(serializers.ModelSerializer):
     def get_name(self, obj):
         full_name = obj.user.get_full_name()
         return full_name or obj.user.username or obj.user.email
+
+
+class ProjectEvaluationSerializer(serializers.ModelSerializer):
+    """프로젝트 평가 직렬화"""
+    user = UserSimpleSerializer(read_only=True)
+    target = UserSimpleSerializer(read_only=True)
+
+    class Meta:
+        model = ProjectEvaluation
+        fields = [
+            'id', 'project', 'user', 'score', 'feedback',
+            'target', 'tags', 'submitted_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'submitted_at', 'updated_at']
+
+
+class ProjectEvaluationCreateSerializer(serializers.Serializer):
+    """프로젝트 평가 제출용 검증 시리얼라이저"""
+    target_id = serializers.IntegerField(required=True)
+    score = serializers.IntegerField(required=False, allow_null=True, min_value=1, max_value=5)
+    feedback = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    tags = serializers.ListField(child=serializers.CharField(), required=False)

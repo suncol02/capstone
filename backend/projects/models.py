@@ -333,6 +333,61 @@ class Application(models.Model):
         return f"{self.user.email} -> {self.project.title} ({self.status})"
 
 
+class ProjectEvaluation(models.Model):
+    """프로젝트 평가 제출 모델
+
+    프로젝트 완료 이후 멤버별 평가 제출 여부와 평가 내용을 저장합니다.
+    """
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='evaluations',
+        help_text='평가 대상 프로젝트'
+    )
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='project_evaluations',
+        help_text='평가 제출자'
+    )
+
+    score = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text='평가 점수'
+    )
+
+    feedback = models.TextField(
+        blank=True,
+        help_text='평가 내용'
+    )
+    target = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='received_evaluations',
+        help_text='평가 대상자',
+        null=True,
+        blank=True,
+    )
+    tags = models.TextField(
+        blank=True,
+        help_text='평가 태그 (쉼표 구분)'
+    )
+
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('project', 'user', 'target')
+        verbose_name = '프로젝트 평가'
+        verbose_name_plural = '프로젝트 평가들'
+        ordering = ['-submitted_at']
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.project.title}"
+
+
 class Archive(models.Model):
     """아카이브 모델
     

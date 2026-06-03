@@ -11,11 +11,14 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
-from .models import Project, ChatRoom, Message, Application, Archive
+from accounts.models import User
+
+from .models import Project, ChatRoom, Message, Application, Archive, ProjectEvaluation
 from .serializers import (
     ProjectSerializer, ProjectListSerializer, ProjectCreateSerializer,
     ChatRoomSerializer, ChatRoomListSerializer,
-    MessageSerializer, ArchiveSerializer, ApplicationSerializer
+    MessageSerializer, ArchiveSerializer, ApplicationSerializer,
+    ProjectEvaluationSerializer, ProjectEvaluationCreateSerializer
 )
 
 
@@ -46,6 +49,28 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """프로젝트 생성시 현재 사용자를 owner로 설정"""
         serializer.save(owner=self.request.user)
+
+    def _get_project_member_ids(self, project):
+        """프로젝트에 속한 멤버 ID 목록 반환"""
+        participant_ids = set(
+            project.applications.filter(status__in=['accepted', 'joined'])
+            .values_list('user_id', flat=True)
+        )
+        participant_ids.add(project.owner_id)
+        return participant_ids
+
+    def _get_evaluation_progress(self, project):
+        """평가 제출 진행 상태 반환"""
+        member_ids = self._get_project_member_ids(project)
+        submitted_user_ids = set(
+            project.evaluations.values_list('user_id', flat=True)
+        )
+
+        return {
+            'required_members_count': len(member_ids),
+            'submitted_members_count': len(member_ids & submitted_user_ids),
+            'all_members_submitted': member_ids.issubset(submitted_user_ids),
+        }
     
     @action(detail=False, methods=['get'])
     def by_category(self, request):
@@ -142,7 +167,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         """해당 프로젝트에 신청한 사용자 목록 조회 (소유자만)"""
         project = self.get_object()
 
-        if project.owner != request.user:
+        member_ids = self._get_project_member_ids(project)
+        if request.user.id not in member_ids:
             return Response({'error': '권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
 
         apps = Application.objects.filter(project=project).select_related('user')
@@ -194,6 +220,113 @@ class ProjectViewSet(viewsets.ModelViewSet):
         app.save()
 
         return Response({'message': '신청자를 거절했습니다.'}, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['get'], url_path='my_application')
+    def my_application(self, request, pk=None):
+        """본인의 신청 상태 조회"""
+        project = self.get_object()
+        try:
+            app = Application.objects.get(project=project, user=request.user)
+            return Response({'status': app.status}, status=status.HTTP_200_OK)
+        except Application.DoesNotExist:
+            return Response({'status': 'none'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """프로젝트를 완료 상태로 변경"""
+        project = self.get_object()
+
+        if project.owner != request.user:
+            return Response({'error': '권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
+
+        if project.status != '완료':
+            project.status = '완료'
+            project.save(update_fields=['status', 'updated_at'])
+
+        progress = self._get_evaluation_progress(project)
+        return Response(
+            {
+                'message': '프로젝트를 완료 상태로 변경했습니다.',
+                'project_status': project.status,
+                **progress,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['get'], url_path='my_tags')
+    def my_tags(self, request, pk=None):
+        project = self.get_object()
+        evaluations = ProjectEvaluation.objects.filter(project=project, target=request.user)
+        all_tags = []
+        for ev in evaluations:
+            if ev.tags:
+                all_tags.extend([t.strip() for t in ev.tags.split(',')])
+        return Response({'tags': all_tags}, status=status.HTTP_200_OK)
+        
+    @action(detail=True, methods=['get'], url_path='my_evaluation')
+    def my_evaluation(self, request, pk=None):
+        project = self.get_object()
+        submitted = ProjectEvaluation.objects.filter(
+            project=project,
+            user=request.user
+        ).exists()
+        return Response({'submitted': submitted}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def evaluate(self, request, pk=None):
+        project = self.get_object()
+
+        if project.status != '완료':
+            return Response({'error': '완료된 프로젝트만 평가할 수 있습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        member_ids = self._get_project_member_ids(project)
+        if request.user.id != project.owner_id and request.user.id not in member_ids:
+            return Response({'error': '권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
+
+        evaluations_data = request.data.get('evaluations', [])
+        for ev in evaluations_data:
+            target_id = ev.get('target_id')
+            tags = ', '.join(ev.get('tags', []))
+            if target_id:
+                ProjectEvaluation.objects.update_or_create(
+                    project=project,
+                    user=request.user,
+                    target_id=target_id,
+                    defaults={'tags': tags}
+                )
+
+        progress = self._get_evaluation_progress(project)
+
+    # 모든 멤버가 평가 완료 시 Archive DB에 자동 저장
+        if progress['all_members_submitted']:
+            for member_id in member_ids:
+                Archive.objects.get_or_create(
+                    user_id=member_id,
+                    project=project,
+                    defaults={'result': '완료'}
+                )
+
+        return Response({'message': '평가를 제출했습니다.', **progress}, status=status.HTTP_200_OK)
+        
+        if progress['all_members_submitted']:
+            for member_id in member_ids:
+                Archive.objects.get_or_create(
+                    user_id=member_id,
+                    project=project,
+                    defaults={'result': '완료'}
+                )
+    # ✅ 채팅방 삭제
+            project.chat_rooms.all().delete()
+
+
+    
+    @action(detail=False, methods=['get'], url_path='user/(?P<user_id>[^/.]+)/archives')
+    def user_archives(self, request, user_id=None):
+        """특정 유저의 아카이브 조회"""
+        archives = Archive.objects.filter(user_id=user_id)
+        serializer = ArchiveSerializer(archives, many=True)
+        return Response(serializer.data)
+            
 
 class ChatRoomViewSet(viewsets.ModelViewSet):
     """채팅방 관리 ViewSet
@@ -325,3 +458,5 @@ class ArchiveViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # 요청의 user는 현재 로그인 사용자로 설정
         serializer.save(user=self.request.user)
+    
+   

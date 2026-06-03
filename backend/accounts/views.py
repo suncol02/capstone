@@ -131,7 +131,8 @@ def login(request):
                 "user_id": user.id,
                 "email": user.email,
                 "department": user.department,
-                "token": token.key
+                "token": token.key,
+                "first_name": user.first_name,
             }, status=status.HTTP_200_OK)
         else:
             print(f"[DEBUG] 패스워드 불일치")
