@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:team_it/screens/archive_screen.dart';
 
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
@@ -300,13 +301,25 @@ class _ApplicantsModalState extends State<ApplicantsModal> {
                               final isAccepted = status == 'accepted' ||
                                   status == 'approved';
 
-                              return Column(
-                                children: [
-                                  if (index > 0)
-                                    const Divider(height: 1),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ArchiveScreen(
+                                        userId: userId.toString(),
+                                        showAppBar: true,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: Column(
+                                  children: [
+                                    if (index > 0)
+                                      const Divider(height: 1),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
                                       vertical: 12,
                                     ),
                                     child: Row(
@@ -446,6 +459,7 @@ class _ApplicantsModalState extends State<ApplicantsModal> {
                                     ),
                                   ),
                                 ],
+                                )
                               );
                             },
                           ),

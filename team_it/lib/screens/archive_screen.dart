@@ -2,11 +2,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'archive_detail_screen.dart';
+import 'package:http/http.dart' as http;  
+
+const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
 class ArchiveScreen extends StatefulWidget {
   final bool showAppBar;
-
-  const ArchiveScreen({super.key, this.showAppBar = true});
+  final String? userId;
+  
+  const ArchiveScreen({super.key, this.showAppBar = true, this.userId});
 
   @override
   State<ArchiveScreen> createState() => _ArchiveScreenState();
@@ -25,13 +29,28 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   }
 
   Future<void> _loadArchive() async {
-    final prefs = await SharedPreferences.getInstance();
-    final email = prefs.getString('user_email') ?? '';
-    final majorData = prefs.getString('user_major') ?? '';
-    
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('auth_token');
+  final email = prefs.getString('user_email') ?? '';
+  final majorData = prefs.getString('user_major') ?? '';
+
+  if (widget.userId != null) {
+    final response = await http.get(
+      Uri.parse('$API_BASE_URL/projects/user/${widget.userId}/archives/'),
+      headers: {'Authorization': 'Token $token'},
+    );
+    if (response.statusCode == 200 && mounted) {
+      final List<dynamic> data = jsonDecode(response.body);
+      setState(() {
+        _displayName = '팀원';
+        _major = '';
+        _completedProjects = data.cast<Map<String, dynamic>>();
+        _isLoading = false;
+      });
+    }
+  } else {
     final archiveJson = prefs.getString('archived_activities') ?? '[]';
     final archive = jsonDecode(archiveJson);
-
     final projects = (archive is List ? archive : [])
         .cast<Map<String, dynamic>>()
         .toList();
@@ -45,6 +64,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
       });
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
