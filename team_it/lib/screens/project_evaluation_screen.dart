@@ -276,37 +276,48 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
   }
 
   Future<void> _saveToArchive(String token, dynamic projectId) async {
-    try {
-      // 내가 받은 태그 조회
-      final tagsResponse = await http.get(
-        Uri.parse('$API_BASE_URL/projects/$projectId/my_tags/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-      );
+  try {
+    final tagsResponse = await http.get(
+      Uri.parse('$API_BASE_URL/projects/$projectId/my_tags/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      },
+    );
 
-      List<dynamic> myTags = [];
-      if (tagsResponse.statusCode == 200) {
-        final tagsData = jsonDecode(utf8.decode(tagsResponse.bodyBytes));
-        myTags = tagsData['tags'] ?? [];
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      final archiveJson = prefs.getString('archived_activities') ?? '[]';
-      List<dynamic> archiveList = jsonDecode(archiveJson);
-      archiveList.insert(0, {
-        'id': projectId.toString(),
-        'title': widget.project['name'] ?? widget.project['title'] ?? '프로젝트',
-        'period': _getProjectPeriod(),
-        'description': widget.project['description'] ?? '',
-        'tags': myTags,
-      });
-      await prefs.setString('archived_activities', jsonEncode(archiveList));
-    } catch (e) {
-      print('[DEBUG] 아카이브 저장 실패: $e');
+    List<dynamic> myTags = [];
+    if (tagsResponse.statusCode == 200) {
+      final tagsData = jsonDecode(utf8.decode(tagsResponse.bodyBytes));
+      myTags = tagsData['tags'] ?? [];
     }
+
+    await http.post(
+      Uri.parse('$API_BASE_URL/archives/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      },
+      body: jsonEncode({
+        'project': projectId,
+        'result': '완료',
+      }),
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    final archiveJson = prefs.getString('archived_activities') ?? '[]';
+    List<dynamic> archiveList = jsonDecode(archiveJson);
+    archiveList.insert(0, {
+      'id': projectId.toString(),
+      'title': widget.project['name'] ?? widget.project['title'] ?? '프로젝트',
+      'period': _getProjectPeriod(),
+      'description': widget.project['description'] ?? '',
+      'tags': myTags,
+    });
+    await prefs.setString('archived_activities', jsonEncode(archiveList));
+  } catch (e) {
+    print('[DEBUG] 아카이브 저장 실패: $e');
   }
+}
 
   @override
   Widget build(BuildContext context) {

@@ -9,8 +9,9 @@ const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 class ArchiveScreen extends StatefulWidget {
   final bool showAppBar;
   final String? userId;
+  final String? userName;
   
-  const ArchiveScreen({super.key, this.showAppBar = true, this.userId});
+  const ArchiveScreen({super.key, this.showAppBar = true, this.userId, this.userName});
 
   @override
   State<ArchiveScreen> createState() => _ArchiveScreenState();
@@ -39,10 +40,12 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
       Uri.parse('$API_BASE_URL/projects/user/${widget.userId}/archives/'),
       headers: {'Authorization': 'Token $token'},
     );
+    print('[DEBUG] user_archives 상태코드: ${response.statusCode}');
+    print('[DEBUG] user_archives 응답: ${response.body}');
     if (response.statusCode == 200 && mounted) {
       final List<dynamic> data = jsonDecode(response.body);
       setState(() {
-        _displayName = '팀원';
+        _displayName = widget.userName ?? '팀원'; // ← 이미 넘어온 name 사용
         _major = '';
         _completedProjects = data.cast<Map<String, dynamic>>();
         _isLoading = false;
@@ -77,7 +80,7 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F3F3),
       appBar: AppBar(
-        title: const Text('나의 아카이브'),
+        title: Text(widget.userName ?? (widget.userId != null ? '팀원 아카이브' : '나의 아카이브')),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -96,9 +99,9 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          const Text(
-            '나의 아카이브',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          Text(
+            widget.userId != null ? '${widget.userName ?? '팀원'}의 아카이브' : '나의 아카이브',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 18),
           _ArchiveProfile(name: _displayName, major: _major),

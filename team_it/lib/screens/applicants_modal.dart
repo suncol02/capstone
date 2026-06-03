@@ -308,6 +308,7 @@ class _ApplicantsModalState extends State<ApplicantsModal> {
                                     MaterialPageRoute(
                                       builder: (context) => ArchiveScreen(
                                         userId: userId.toString(),
+                                        userName: name,
                                         showAppBar: true,
                                       ),
                                     ),
