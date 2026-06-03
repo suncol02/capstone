@@ -250,12 +250,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadMyInfo() async {
   final prefs = await SharedPreferences.getInstance();
+  final firstName = prefs.getString('first_name') ?? '';
+  final username = prefs.getString('username') ?? '';
+  final email = prefs.getString('user_email') ?? '';
 
   setState(() {
-    _myUsername =
-        prefs.getString('username') ??
-        prefs.getString('user_email') ??
-        '';
+    if (firstName.isNotEmpty) {
+      _myUsername = firstName;
+    } else if (username.contains('@')) {
+      _myUsername = username.split('@')[0];
+    } else if (username.isNotEmpty) {
+      _myUsername = username;
+    } else if (email.contains('@')) {
+      _myUsername = email.split('@')[0];
+    } else {
+      _myUsername = email;
+    }
   });
 }
 
@@ -502,17 +512,28 @@ Future<void> sendMessage() async {
   }
 
   String _senderName(Map<String, dynamic> message) {
-    final sender = message['sender'] ?? message['user'];
-    if (sender is Map) {
-      return (sender['username'] ??
-              sender['name'] ??
-              sender['email'] ??
-              '알 수 없음')
-          .toString();
+  final sender = message['sender'] ?? message['user'];
+  if (sender is Map) {
+    // first_name 우선, 없으면 username, 없으면 email 앞부분
+    final firstName = sender['first_name']?.toString() ?? '';
+    if (firstName.isNotEmpty) return firstName;
+
+    final username = sender['username']?.toString() ?? '';
+    final email = sender['email']?.toString() ?? '';
+
+    // username이 이메일 형태면 @ 앞부분만
+    if (username.contains('@')) {
+      return username.split('@')[0];
     }
-    if (sender != null) return sender.toString();
+    if (username.isNotEmpty) return username;
+
+    // email에서 @ 앞부분
+    if (email.contains('@')) return email.split('@')[0];
     return '알 수 없음';
   }
+  if (sender != null) return sender.toString();
+  return '알 수 없음';
+}
 
   @override
   Widget build(BuildContext context) {
