@@ -767,6 +767,27 @@ Widget _buildBottomButton(bool isFull, String title, bool canApply, String butto
                         '$currentCount/$maxCount 명',
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
+                      const Spacer(),
+                      if (_isOwner || _applicationStatus == 'accepted' || _applicationStatus == 'joined')
+                        GestureDetector(
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                             builder: (context) => ApplicantsModal(
+                                projectId: _projectId() ?? '',
+                                projectTitle: _projectTitle(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            '팀원 보기',
+                            style: TextStyle(
+                              color: Color(0xFF8E8CF1),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 10),
