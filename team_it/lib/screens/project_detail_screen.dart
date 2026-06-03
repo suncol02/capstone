@@ -109,9 +109,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         _applicationStatus = 'pending';
       }
     }
-    period ??= prefs.getString('project_period_title_$title');
-    localOwner =
-        localOwner || (prefs.getBool('project_owner_title_$title') ?? false);
+
 
     final ownsProject =
         owner != null &&
