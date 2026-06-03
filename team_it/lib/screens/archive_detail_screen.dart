@@ -31,9 +31,24 @@ class _ArchiveDetailScreenState extends State<ArchiveDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<dynamic> tags = widget.activity['tags'] ?? ['👍 소통이 잘 돼요', '😎 피드백이 정확해요'];
-    final String title = widget.activity['name'] ?? widget.activity['title'] ?? '완료 프로젝트';
-    final String description = widget.activity['description'] ?? '상세 설명 정보가 없습니다.';
+    final projectDetail = widget.activity['project_detail'] as Map<String, dynamic>?;
+
+    final String title = widget.activity['title']
+        ?? widget.activity['name']
+        ?? projectDetail?['title']
+        ?? projectDetail?['name']
+        ?? '완료 프로젝트';
+
+    final String description = widget.activity['description']
+        ?? projectDetail?['description']
+        ?? '상세 설명 정보가 없습니다.';
+
+    final rawTags = widget.activity['tags'];
+    final List<dynamic> tags = rawTags is List
+        ? rawTags
+        : rawTags is String && rawTags.isNotEmpty
+            ? rawTags.split(',').map((t) => t.trim()).toList()
+            : [];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),

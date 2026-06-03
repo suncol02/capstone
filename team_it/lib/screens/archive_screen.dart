@@ -58,9 +58,14 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
         .cast<Map<String, dynamic>>()
         .toList();
 
+    final firstName = prefs.getString('first_name') ?? '';  
+    final displayName = firstName.isNotEmpty               
+        ? firstName
+        : (email.contains('@') ? email.split('@')[0] : (email.isEmpty ? '사용자' : email));
+
     if (mounted) {
       setState(() {
-        _displayName = email.contains('@') ? email.split('@')[0] : (email.isEmpty ? '사용자' : email);
+        _displayName = displayName;  
         _major = majorData.trim().isNotEmpty ? majorData.trim() : '정보 없음';
         _completedProjects = projects;
         _isLoading = false;

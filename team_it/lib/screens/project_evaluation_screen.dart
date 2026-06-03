@@ -230,15 +230,19 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         body: jsonEncode({'evaluations': evaluations}),
       );
 
+      print('[DEBUG] evaluate 상태코드: ${response.statusCode}');  
+      print('[DEBUG] evaluate 응답: ${response.body}');            
+
       if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
+        print('[DEBUG] 평가 응답: $data');
         final allSubmitted = data['all_members_submitted'] ?? false;
-
-        setState(() => _hasSubmitted = true);
+        print('[DEBUG] allSubmitted 값: $allSubmitted');
 
         if (allSubmitted) {
+          print('[DEBUG] _saveToArchive 호출 시작');
           await _saveToArchive(token, projectId);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -246,18 +250,19 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
           );
           await Future.delayed(const Duration(seconds: 2));
           if (!mounted) return;
+          setState(() => _hasSubmitted = true);
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const MainScreen()),
             (route) => false,
           );
-    
+
         } else {
           final submitted = data['submitted_members_count'] ?? 0;
           final required = data['required_members_count'] ?? 0;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('평가를 제출했습니다. ($submitted/$required 명 완료)')),
           );
-          Navigator.pop(context);
+          setState(() => _hasSubmitted = true);
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -284,6 +289,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         'Authorization': 'Token $token',
       },
     );
+    print('[DEBUG] my_tags 응답: ${tagsResponse.statusCode} / ${tagsResponse.body}');
 
     List<dynamic> myTags = [];
     if (tagsResponse.statusCode == 200) {
@@ -291,7 +297,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
       myTags = tagsData['tags'] ?? [];
     }
 
-    await http.post(
+    final archiveRes = await http.post(
       Uri.parse('$API_BASE_URL/archives/'),
       headers: {
         'Content-Type': 'application/json',
@@ -302,17 +308,23 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         'result': '완료',
       }),
     );
+    print('[DEBUG] archive POST 응답: ${archiveRes.statusCode} / ${archiveRes.body}'); 
 
     final prefs = await SharedPreferences.getInstance();
     final archiveJson = prefs.getString('archived_activities') ?? '[]';
     List<dynamic> archiveList = jsonDecode(archiveJson);
-    archiveList.insert(0, {
-      'id': projectId.toString(),
-      'title': widget.project['name'] ?? widget.project['title'] ?? '프로젝트',
-      'period': _getProjectPeriod(),
-      'description': widget.project['description'] ?? '',
-      'tags': myTags,
-    });
+    final idStr = projectId.toString();
+    final alreadyExists = archiveList.any((a) => a['id']?.toString() == idStr);
+    if (!alreadyExists) {
+      archiveList.insert(0, {
+        'id': idStr,
+        'title': widget.project['name'] ?? widget.project['title'] ?? '프로젝트',
+        'period': _getProjectPeriod(),
+        'description': widget.project['description'] ?? '',
+        'tags': myTags,
+      });
+      await prefs.setString('archived_activities', jsonEncode(archiveList));
+    }
     await prefs.setString('archived_activities', jsonEncode(archiveList));
   } catch (e) {
     print('[DEBUG] 아카이브 저장 실패: $e');
@@ -332,7 +344,16 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (_hasSubmitted) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const MainScreen()),
+                (route) => false,
+              );
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
       ),
       body: _isLoading
@@ -346,7 +367,15 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
   }
 
   Widget _buildAlreadySubmitted() {
-    return Center(
+  return WillPopScope(
+    onWillPop: () async {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const MainScreen()),
+        (route) => false,
+      );
+      return false;
+    },
+    child: Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -363,8 +392,9 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEvaluationBody() {
     final member = _members[_currentMemberIndex];

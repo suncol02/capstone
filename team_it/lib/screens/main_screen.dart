@@ -97,6 +97,10 @@ class _MainScreenState extends State<MainScreen> {
           });
           if (index == 0) {
             _refreshProjectList();
+          } else if (index == 2) {
+            setState(() {
+              _screens[2] = const ArchiveScreen(showAppBar: false);
+            });
           }
         },
         selectedItemColor: Colors.blue,
@@ -151,73 +155,93 @@ class _ProjectListState extends State<ProjectList> {
   }
 
   Future<void> _loadProjects() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? token = prefs.getString('auth_token');
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final String? token = prefs.getString('auth_token');
 
-      if (token == null) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-          );
-        }
-        return;
+    if (token == null) {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
       }
+      return;
+    }
 
-      final archiveJson = prefs.getString('archived_activities') ?? '[]';
-      final List<dynamic> archiveList = jsonDecode(archiveJson);
-      final List<String> archivedIds = archiveList.map((item) {
-        return (item['id'] ?? '').toString();
-      }).toList();
+    final archiveJson = prefs.getString('archived_activities') ?? '[]';
+    final List<dynamic> archiveList = jsonDecode(archiveJson);
+    final List<String> archivedIds = archiveList.map((item) {
+      return (item['id'] ?? '').toString();
+    }).toList();
 
-      final uri = widget.category == '전체'
-          ? Uri.parse('$API_BASE_URL/projects/')
-          : Uri.parse(
-              '$API_BASE_URL/projects/by_category/?category=${widget.category}',
-            );
-
-      final response = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            _projects = data;
-            _archivedIds = archivedIds;
-            _isLoading = false;
-          });
-        }
-      } else if (response.statusCode == 401) {
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-          );
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _error = '프로젝트 로드 실패 (${response.statusCode})';
-            _isLoading = false;
-          });
+    final archiveResponse = await http.get(
+      Uri.parse('$API_BASE_URL/archives/'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      },
+    );
+    if (archiveResponse.statusCode == 200) {
+      final List<dynamic> backendArchives = jsonDecode(archiveResponse.body);
+      print('[DEBUG] backendArchives: $backendArchives');
+      for (var a in backendArchives) {
+        final id = (a['project'] ?? '').toString();
+        print('[DEBUG] archive project id: $id');
+        if (id.isNotEmpty && !archivedIds.contains(id)) {
+          archivedIds.add(id);
         }
       }
-    } catch (e) {
+      print('[DEBUG] archive project id: $archivedIds');
+    }
+
+    final uri = widget.category == '전체'
+        ? Uri.parse('$API_BASE_URL/projects/')
+        : Uri.parse(
+            '$API_BASE_URL/projects/by_category/?category=${widget.category}',
+          );
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Token $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
       if (mounted) {
         setState(() {
-          _error = '오류: $e';
+          _projects = data;
+          _archivedIds = archivedIds;
+          _isLoading = false;
+        });
+      }
+    } else if (response.statusCode == 401) {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _error = '프로젝트 로드 실패 (${response.statusCode})';
           _isLoading = false;
         });
       }
     }
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        _error = '오류: $e';
+        _isLoading = false;
+      });
+    }
   }
+}
 
   @override
   void dispose() {
