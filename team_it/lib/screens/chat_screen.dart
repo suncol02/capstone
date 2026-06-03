@@ -305,34 +305,42 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _connectWebSocket() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+
+    if (token == null) return;
+
+    final uri = _webSocketUri(token);
+    debugPrint('[DEBUG] WebSocket 연결 시도: $uri');
+
+    final channel = WebSocketChannel.connect(uri);
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-
-      if (token == null) return;
-
-      final uri = _webSocketUri(token);
-      final channel = WebSocketChannel.connect(uri);
-
-      _channel = channel;
-      _socketSubscription = channel.stream.listen(
-        _handleSocketMessage,
-        onError: (error) {
-          debugPrint('[DEBUG] WebSocket 오류: $error');
-          _closeSocket();
-        },
-        onDone: () {
-          debugPrint('[DEBUG] WebSocket 연결 종료');
-          _closeSocket();
-        },
-        cancelOnError: true,
-      );
-      debugPrint('[DEBUG] WebSocket 연결 시도: $uri');
+      await channel.ready;
     } catch (e) {
-      debugPrint('[DEBUG] WebSocket 연결 실패: $e');
-      _closeSocket();
+      debugPrint('[DEBUG] WebSocket 핸드셰이크 실패: $e');
+      return;
     }
+
+    _channel = channel;
+    _socketSubscription = channel.stream.listen(
+      _handleSocketMessage,
+      onError: (error) {
+        debugPrint('[DEBUG] WebSocket 오류: $error');
+        _closeSocket();
+      },
+      onDone: () {
+        debugPrint('[DEBUG] WebSocket 연결 종료');
+        _closeSocket();
+      },
+      cancelOnError: true,
+    );
+  } catch (e) {
+    debugPrint('[DEBUG] WebSocket 연결 실패: $e');
+    _closeSocket();
   }
+}
 
   Uri _webSocketUri(String token) {
     final apiUri = Uri.parse(API_BASE_URL);
@@ -398,27 +406,19 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Future<void> sendMessage() async {
-    final text = controller.text.trim();
-    if (text.isEmpty || _isSending) return;
+Future<void> sendMessage() async {
+  final text = controller.text.trim();
+  if (text.isEmpty || _isSending) return;
 
-    if (_channel != null) {
-      setState(() => _isSending = true);
-      _channel!.sink.add(jsonEncode({'content': text}));
-      controller.clear();
-
-      final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
-      _appendMessage({
-        'id': tempId,
-        'content': text,
-        'sender': {'username': _myUsername},
-      });
-
-      setState(() => _isSending = false);
-      return;
+  if (_channel != null) {
+    setState(() => _isSending = true);
+    _channel!.sink.add(jsonEncode({'content': text}));
+    controller.clear();
+    setState(() => _isSending = false);
+    return;
   }
 
-    try {
+  try {
       setState(() => _isSending = true);
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
