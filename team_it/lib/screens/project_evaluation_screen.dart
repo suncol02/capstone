@@ -282,21 +282,6 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
 
   Future<void> _saveToArchive(String token, dynamic projectId) async {
   try {
-    final tagsResponse = await http.get(
-      Uri.parse('$API_BASE_URL/projects/$projectId/my_tags/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Token $token',
-      },
-    );
-    print('[DEBUG] my_tags 응답: ${tagsResponse.statusCode} / ${tagsResponse.body}');
-
-    List<dynamic> myTags = [];
-    if (tagsResponse.statusCode == 200) {
-      final tagsData = jsonDecode(utf8.decode(tagsResponse.bodyBytes));
-      myTags = tagsData['tags'] ?? [];
-    }
-
     final archiveRes = await http.post(
       Uri.parse('$API_BASE_URL/archives/'),
       headers: {
@@ -308,24 +293,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         'result': '완료',
       }),
     );
-    print('[DEBUG] archive POST 응답: ${archiveRes.statusCode} / ${archiveRes.body}'); 
-
-    final prefs = await SharedPreferences.getInstance();
-    final archiveJson = prefs.getString('archived_activities') ?? '[]';
-    List<dynamic> archiveList = jsonDecode(archiveJson);
-    final idStr = projectId.toString();
-    final alreadyExists = archiveList.any((a) => a['id']?.toString() == idStr);
-    if (!alreadyExists) {
-      archiveList.insert(0, {
-        'id': idStr,
-        'title': widget.project['name'] ?? widget.project['title'] ?? '프로젝트',
-        'period': _getProjectPeriod(),
-        'description': widget.project['description'] ?? '',
-        'tags': myTags,
-      });
-      await prefs.setString('archived_activities', jsonEncode(archiveList));
-    }
-    await prefs.setString('archived_activities', jsonEncode(archiveList));
+    print('[DEBUG] archive POST 응답: ${archiveRes.statusCode} / ${archiveRes.body}');
   } catch (e) {
     print('[DEBUG] 아카이브 저장 실패: $e');
   }
