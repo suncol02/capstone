@@ -76,8 +76,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           owner['email'] ??
           owner['username'] ??
           owner['name'] ??
-          owner['id'] ??
-          owner['pk'];
+          owner['id']?.toString() ??
+          owner['pk']?.toString();
       return value?.toString();
     }
 
@@ -118,7 +118,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         owner.trim().isNotEmpty &&
         (owner == email ||
             owner == userId ||
-            owner == prefs.getString('username'));
+            owner == prefs.getString('username') ||
+            owner == prefs.getString('user_id'));
 
     if (!mounted) return;
     setState(() {
