@@ -445,10 +445,9 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
                     activeColor: const Color(0xFF9B98EB),
                     onChanged: (bool? value) {
                       setState(() {
+                        selectedTags.clear();
                         if (value == true) {
                           selectedTags.add(tagString);
-                        } else {
-                          selectedTags.remove(tagString);
                         }
                       });
                     },
