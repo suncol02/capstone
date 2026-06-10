@@ -179,14 +179,15 @@ class ChatRoom(models.Model):
 
 
 class Message(models.Model):
-    """메시지 모델
+    """메시지 모델 [수정됨]
     
-    채팅방의 메시지를 저장합니다.
+    채팅방의 메시지를 저장하며, 이미지 전송 기능을 추가로 지원합니다.
     
     Attributes:
         chat_room (ForeignKey): 메시지가 속한 채팅방
         sender (ForeignKey): 메시지 발신자
-        content (TextField): 메시지 내용
+        content (TextField): 메시지 내용 (선택 가능)
+        image (ImageField): 첨부 이미지 파일 (선택 가능)
         created_at (DateTimeField): 메시지 생성 시간
     """
     # 메시지가 속한 채팅방
@@ -205,9 +206,19 @@ class Message(models.Model):
         help_text="메시지를 보낸 사용자"
     )
     
-    # 메시지 내용
+    # 메시지 내용 (사진만 보낼 때를 대비하여 blank=True, null=True 수정)
     content = models.TextField(
+        blank=True,
+        null=True,
         help_text="메시지 내용"
+    )
+    
+    # [새로 추가] 이미지 파일을 저장하기 위한 필드 (Flutter 전송용 키값: 'image')
+    image = models.ImageField(
+        upload_to='chat_images/',
+        blank=True,
+        null=True,
+        help_text="채팅 첨부 이미지"
     )
     
     # 생성 시간
@@ -225,7 +236,8 @@ class Message(models.Model):
         Returns:
             str: 발신자와 메시지 내용 요약
         """
-        return f"{self.sender.username}: {self.content[:50]}"
+        display_content = self.content[:50] if self.content else "[사진 접수]"
+        return f"{self.sender.username}: {display_content}"
 
 
 class Recruitment(models.Model):

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'archive_detail_screen.dart';
-import 'package:http/http.dart' as http;  
+import 'package:http/http.dart' as http;
 
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
@@ -10,7 +10,7 @@ class ArchiveScreen extends StatefulWidget {
   final bool showAppBar;
   final String? userId;
   final String? userName;
-  
+
   const ArchiveScreen({super.key, this.showAppBar = true, this.userId, this.userName});
 
   @override
@@ -30,51 +30,93 @@ class _ArchiveScreenState extends State<ArchiveScreen> {
   }
 
   Future<void> _loadArchive() async {
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString('auth_token');
-  final email = prefs.getString('user_email') ?? '';
-  final majorData = prefs.getString('user_major') ?? '';
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    final email = prefs.getString('user_email') ?? '';
+    final majorData = prefs.getString('user_major') ?? '';
 
-  if (widget.userId != null) {
-    final response = await http.get(
-      Uri.parse('$API_BASE_URL/projects/user/${widget.userId}/archives/'),
-      headers: {'Authorization': 'Token $token'},
-    );
-    print('[DEBUG] user_archives 상태코드: ${response.statusCode}');
-    print('[DEBUG] user_archives 응답: ${response.body}');
-    if (response.statusCode == 200 && mounted) {
-      final List<dynamic> data = jsonDecode(response.body);
-      setState(() {
-        _displayName = widget.userName ?? '팀원'; // ← 이미 넘어온 name 사용
-        _major = '';
-        _completedProjects = data.cast<Map<String, dynamic>>();
-        _isLoading = false;
-      });
-    }
-  } else {
-    final response = await http.get(
-      Uri.parse('$API_BASE_URL/archives/'),
-      headers: {'Authorization': 'Token $token'},
-    );
+    try {
+      if (widget.userId != null) {
+        final response = await http.get(
+          Uri.parse('$API_BASE_URL/projects/user/${widget.userId}/archives/'),
+          headers: {'Authorization': 'Token $token'},
+        );
+        print('[DEBUG] user_archives 상태코드: ${response.statusCode}');
+        print('[DEBUG] user_archives 응답: ${response.body}');
 
-    final firstName = prefs.getString('first_name') ?? '';
-    final displayName = firstName.isNotEmpty
-        ? firstName
-        : (email.contains('@') ? email.split('@')[0] : (email.isEmpty ? '사용자' : email));
+        if (response.statusCode == 200 && mounted) {
+          final List<dynamic> data = jsonDecode(response.body);
 
-    if (response.statusCode == 200 && mounted) {
-      final List<dynamic> data = jsonDecode(response.body);
-      setState(() {
-        _displayName = displayName;
-        _major = majorData.trim().isNotEmpty ? majorData.trim() : '정보 없음';
-        _completedProjects = data.cast<Map<String, dynamic>>();
-        _isLoading = false;
-      });
-    } else {
+          // 🎯 안전한 타입 변환 및 중복 필터링
+          final List<Map<String, dynamic>> parsedList = [];
+          final Set<int> seenProjectIds = {};
+
+          for (var item in data) {
+            if (item is Map) {
+              final mappedItem = Map<String, dynamic>.from(item);
+              final projectId = mappedItem['project'];
+
+              if (projectId != null && !seenProjectIds.contains(projectId)) {
+                seenProjectIds.add(projectId);
+                parsedList.add(mappedItem);
+              }
+            }
+          }
+
+          setState(() {
+            _displayName = widget.userName ?? '팀원';
+            _major = '';
+            _completedProjects = parsedList;
+            _isLoading = false;
+          });
+        } else {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      } else {
+        final response = await http.get(
+          Uri.parse('$API_BASE_URL/archives/'),
+          headers: {'Authorization': 'Token $token'},
+        );
+
+        final firstName = prefs.getString('first_name') ?? '';
+        final displayName = firstName.isNotEmpty
+            ? firstName
+            : (email.contains('@') ? email.split('@')[0] : (email.isEmpty ? '사용자' : email));
+
+        if (response.statusCode == 200 && mounted) {
+          final List<dynamic> data = jsonDecode(response.body);
+
+          // 🎯 안전한 타입 변환 및 중복 필터링
+          final List<Map<String, dynamic>> parsedList = [];
+          final Set<int> seenProjectIds = {};
+
+          for (var item in data) {
+            if (item is Map) {
+              final mappedItem = Map<String, dynamic>.from(item);
+              final projectId = mappedItem['project'];
+
+              if (projectId != null && !seenProjectIds.contains(projectId)) {
+                seenProjectIds.add(projectId);
+                parsedList.add(mappedItem);
+              }
+            }
+          }
+
+          setState(() {
+            _displayName = displayName;
+            _major = majorData.trim().isNotEmpty ? majorData.trim() : '정보 없음';
+            _completedProjects = parsedList;
+            _isLoading = false;
+          });
+        } else {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      }
+    } catch (e) {
+      print('[ERROR] 아카이브 데이터 로드 중 에러 발생: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -151,14 +193,8 @@ class _ArchiveProfile extends StatelessWidget {
           child: const Icon(Icons.person, color: Colors.white, size: 42),
         ),
         const SizedBox(height: 8),
-        Text(
-          name,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        Text(
-          major,
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-        ),
+        Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(major, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
       ],
     );
   }
@@ -177,28 +213,15 @@ class _ArchiveProgress extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            '프로젝트 완료 개수', 
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
+          const Text('프로젝트 완료 개수', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           Text(
             '$completedCount개',
-            style: const TextStyle(
-              color: Color(0xFFFF8F1F),
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(color: Color(0xFFFF8F1F), fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ],
       ),
@@ -214,29 +237,18 @@ class _CompletedActivityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final projectDetail = project['project_detail'] as Map<String, dynamic>?;
-    final title = projectDetail?['name'] ?? projectDetail?['title']?? project['name'] ?? project['title'] ?? '완료 프로젝트';
+    final title = projectDetail?['title'] ?? projectDetail?['name'] ?? project['title'] ?? project['name'] ?? '완료 프로젝트';
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ArchiveDetailScreen(activity: project),
-          ),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (context) => ArchiveDetailScreen(activity: project)));
       },
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3))],
         ),
         child: Row(
           children: [
@@ -275,18 +287,12 @@ class _EmptyArchive extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 48),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
       child: Column(
         children: [
           Icon(Icons.archive_outlined, size: 44, color: Colors.grey.shade400),
           const SizedBox(height: 10),
-          const Text(
-            '완료한 활동이 없습니다.',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
+          const Text('완료한 활동이 없습니다.', style: TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
     );

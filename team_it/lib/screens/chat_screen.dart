@@ -1,12 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io'; // 파일 처리를 위해 필요
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:image_picker/image_picker.dart'; // image_picker 패키지 임포트
 
 const String API_BASE_URL = 'http://team-it.iptime.org:8000/api';
 
+// ==========================================
+// 1. 채팅방 목록 화면 (ChatEntryScreen)
+// ==========================================
 class ChatEntryScreen extends StatefulWidget {
   const ChatEntryScreen({super.key});
 
@@ -46,10 +51,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
 
       final response = await http.get(
         Uri.parse('$API_BASE_URL/chat-rooms/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Token $token',
-        },
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
       );
 
       if (!mounted) return;
@@ -106,17 +108,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
     final roomName = _roomName(room);
 
     if (roomId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('채팅방 정보를 찾을 수 없습니다.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('채팅방 정보를 찾을 수 없습니다.')));
       return;
     }
 
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            ChatScreen(chatRoomId: roomId, roomName: roomName),
+        builder: (context) => ChatScreen(chatRoomId: roomId, roomName: roomName),
       ),
     );
   }
@@ -146,10 +145,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                   Center(child: Text(_error!)),
                   const SizedBox(height: 16),
                   Center(
-                    child: ElevatedButton(
-                      onPressed: _loadChatRooms,
-                      child: const Text('다시 불러오기'),
-                    ),
+                    child: ElevatedButton(onPressed: _loadChatRooms, child: const Text('다시 불러오기')),
                   ),
                 ],
               );
@@ -159,10 +155,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                 children: [
                   const SizedBox(height: 220),
                   const Center(
-                    child: Text(
-                      '참여 중인 채팅방이 없습니다.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
+                    child: Text('참여 중인 채팅방이 없습니다.', style: TextStyle(color: Colors.grey)),
                   ),
                 ],
               );
@@ -181,10 +174,7 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                     onTap: () => _openRoom(room),
                     leading: const CircleAvatar(
                       backgroundColor: Color(0xFFE8ECFF),
-                      child: Icon(
-                        Icons.chat_bubble_outline,
-                        color: Color(0xFF7A82F0),
-                      ),
+                      child: Icon(Icons.chat_bubble_outline, color: Color(0xFF7A82F0)),
                     ),
                     title: Text(
                       _roomName(room),
@@ -196,15 +186,9 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
                       _roomSubtitle(room),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 13,
-                      ),
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                     ),
-                    trailing: const Icon(
-                      Icons.chevron_right,
-                      color: Colors.grey,
-                    ),
+                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                   ),
                 );
               },
@@ -216,15 +200,14 @@ class _ChatEntryScreenState extends State<ChatEntryScreen> {
   }
 }
 
+// ==========================================
+// 2. 개별 채팅방 화면 (ChatScreen)
+// ==========================================
 class ChatScreen extends StatefulWidget {
   final int chatRoomId;
   final String roomName;
 
-  const ChatScreen({
-    super.key,
-    required this.chatRoomId,
-    required this.roomName,
-  });
+  const ChatScreen({super.key, required this.chatRoomId, required this.roomName});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -240,6 +223,8 @@ class _ChatScreenState extends State<ChatScreen> {
   WebSocketChannel? _channel;
   StreamSubscription? _socketSubscription;
 
+  final ImagePicker _picker = ImagePicker(); // 이미지 피커 인스턴스
+
   @override
   void initState() {
     super.initState();
@@ -249,27 +234,26 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _loadMyInfo() async {
-  final prefs = await SharedPreferences.getInstance();
-  final firstName = prefs.getString('first_name') ?? '';
-  final username = prefs.getString('username') ?? '';
-  final email = prefs.getString('user_email') ?? '';
+    final prefs = await SharedPreferences.getInstance();
+    final firstName = prefs.getString('first_name') ?? '';
+    final username = prefs.getString('username') ?? '';
+    final email = prefs.getString('user_email') ?? '';
 
-  setState(() {
-    if (firstName.isNotEmpty) {
-      _myUsername = firstName;
-    } else if (username.contains('@')) {
-      _myUsername = username.split('@')[0];
-    } else if (username.isNotEmpty) {
-      _myUsername = username;
-    } else if (email.contains('@')) {
-      _myUsername = email.split('@')[0];
-    } else {
-      _myUsername = email;
-    }
-  });
-}
+    setState(() {
+      if (firstName.isNotEmpty) {
+        _myUsername = firstName;
+      } else if (username.contains('@')) {
+        _myUsername = username.split('@')[0];
+      } else if (username.isNotEmpty) {
+        _myUsername = username;
+      } else if (email.contains('@')) {
+        _myUsername = email.split('@')[0];
+      } else {
+        _myUsername = email;
+      }
+    });
+  }
 
-  // 백엔드 API에서 이전 대화 이력 가져오기
   Future<void> _fetchPreviousMessages() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -279,13 +263,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final response = await http
           .get(
-            Uri.parse(
-              '$API_BASE_URL/chat-rooms/${widget.chatRoomId}/messages/',
-            ),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Token $token',
-            },
+            Uri.parse('$API_BASE_URL/chat-rooms/${widget.chatRoomId}/messages/'),
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
           )
           .timeout(const Duration(seconds: 5));
 
@@ -315,42 +294,42 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _connectWebSocket() async {
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
-
-    if (token == null) return;
-
-    final uri = _webSocketUri(token);
-    debugPrint('[DEBUG] WebSocket 연결 시도: $uri');
-
-    final channel = WebSocketChannel.connect(uri);
-
     try {
-      await channel.ready;
-    } catch (e) {
-      debugPrint('[DEBUG] WebSocket 핸드셰이크 실패: $e');
-      return;
-    }
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
 
-    _channel = channel;
-    _socketSubscription = channel.stream.listen(
-      _handleSocketMessage,
-      onError: (error) {
-        debugPrint('[DEBUG] WebSocket 오류: $error');
-        _closeSocket();
-      },
-      onDone: () {
-        debugPrint('[DEBUG] WebSocket 연결 종료');
-        _closeSocket();
-      },
-      cancelOnError: true,
-    );
-  } catch (e) {
-    debugPrint('[DEBUG] WebSocket 연결 실패: $e');
-    _closeSocket();
+      if (token == null) return;
+
+      final uri = _webSocketUri(token);
+      debugPrint('[DEBUG] WebSocket 연결 시도: $uri');
+
+      final channel = WebSocketChannel.connect(uri);
+
+      try {
+        await channel.ready;
+      } catch (e) {
+        debugPrint('[DEBUG] WebSocket 핸드셰이크 실패: $e');
+        return;
+      }
+
+      _channel = channel;
+      _socketSubscription = channel.stream.listen(
+        _handleSocketMessage,
+        onError: (error) {
+          debugPrint('[DEBUG] WebSocket 오류: $error');
+          _closeSocket();
+        },
+        onDone: () {
+          debugPrint('[DEBUG] WebSocket 연결 종료');
+          _closeSocket();
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      debugPrint('[DEBUG] WebSocket 연결 실패: $e');
+      _closeSocket();
+    }
   }
-}
 
   Uri _webSocketUri(String token) {
     final apiUri = Uri.parse(API_BASE_URL);
@@ -367,9 +346,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _handleSocketMessage(dynamic event) {
     try {
-      final decoded = event is String
-          ? jsonDecode(event)
-          : jsonDecode(utf8.decode(event));
+      final decoded = event is String ? jsonDecode(event) : jsonDecode(utf8.decode(event));
 
       if (decoded is Map && decoded['type'] == 'error') {
         debugPrint('[DEBUG] WebSocket 서버 오류: ${decoded['message']}');
@@ -416,41 +393,33 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-Future<void> sendMessage() async {
-  final text = controller.text.trim();
-  if (text.isEmpty || _isSending) return;
+  Future<void> sendMessage() async {
+    final text = controller.text.trim();
+    if (text.isEmpty || _isSending) return;
 
-  if (_channel != null) {
-    setState(() => _isSending = true);
-    _channel!.sink.add(jsonEncode({'content': text}));
-    controller.clear();
-    setState(() => _isSending = false);
-    return;
-  }
+    if (_channel != null) {
+      setState(() => _isSending = true);
+      _channel!.sink.add(jsonEncode({'content': text}));
+      controller.clear();
+      setState(() => _isSending = false);
+      return;
+    }
 
-  try {
+    try {
       setState(() => _isSending = true);
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
       if (token == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('인증 정보가 없습니다.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('인증 정보가 없습니다.')));
         return;
       }
 
-      // HTTP POST로 메시지 전송
       final response = await http
           .post(
-            Uri.parse(
-              '$API_BASE_URL/chat-rooms/${widget.chatRoomId}/send_message/',
-            ),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Token $token',
-            },
+            Uri.parse('$API_BASE_URL/chat-rooms/${widget.chatRoomId}/send_message/'),
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Token $token'},
             body: jsonEncode({'content': text}),
           )
           .timeout(const Duration(seconds: 10));
@@ -458,30 +427,100 @@ Future<void> sendMessage() async {
       if (!mounted) return;
 
       if (response.statusCode == 201) {
-        try {
-          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-          _appendMessage(decoded);
-          controller.clear();
-          debugPrint('[DEBUG] HTTP로 메시지 전송 완료');
-        } catch (e) {
-          debugPrint('[DEBUG] 응답 파싱 실패: $e');
-          controller.clear();
-        }
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        _appendMessage(decoded);
+        controller.clear();
       } else {
-        debugPrint('[DEBUG] 메시지 전송 실패: ${response.statusCode}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('메시지 전송 실패: ${response.statusCode}')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('메시지 전송 실패: ${response.statusCode}')));
       }
     } catch (e) {
       if (!mounted) return;
-      debugPrint('[DEBUG] 메시지 전송 예외: $e');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('메시지 전송 실패: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('메시지 전송 실패: $e')));
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  Future<void> _pickAndSendImage(ImageSource source) async {
+    if (_isSending) return;
+
+    try {
+      final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 70);
+
+      if (pickedFile == null) return;
+
+      setState(() => _isSending = true);
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      if (token == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('인증 정보가 없습니다.')));
+        return;
+      }
+
+      final uri = Uri.parse('$API_BASE_URL/chat-rooms/${widget.chatRoomId}/send_message/');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Token $token'
+        ..files.add(await http.MultipartFile.fromPath('image', pickedFile.path));
+
+      if (controller.text.trim().isNotEmpty) {
+        request.fields['content'] = controller.text.trim();
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 20));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        _appendMessage(decoded);
+        controller.clear();
+        debugPrint('[DEBUG] 이미지 전송 성공');
+      } else {
+        debugPrint('[DEBUG] 이미지 전송 실패: ${response.statusCode} / ${response.body}');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('사진 전송 실패 (${response.statusCode})')));
+      }
+    } catch (e) {
+      debugPrint('[DEBUG] 이미지 전송 예외: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('사진 전송 중 오류 발생: $e')));
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  void _showImagePickerModal() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('앨범에서 선택'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndSendImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('카메라로 촬영'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndSendImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -511,38 +550,41 @@ Future<void> sendMessage() async {
     return content?.toString() ?? '';
   }
 
-  String _senderName(Map<String, dynamic> message) {
-  final sender = message['sender'] ?? message['user'];
-  if (sender is Map) {
-    // first_name 우선, 없으면 username, 없으면 email 앞부분
-    final firstName = sender['first_name']?.toString() ?? '';
-    if (firstName.isNotEmpty) return firstName;
-
-    final username = sender['username']?.toString() ?? '';
-    final email = sender['email']?.toString() ?? '';
-
-    // username이 이메일 형태면 @ 앞부분만
-    if (username.contains('@')) {
-      return username.split('@')[0];
+  String? _messageImageUrl(Map<String, dynamic> message) {
+    final imageUrl = message['image'] ?? message['image_url'] ?? message['file'];
+    if (imageUrl != null && imageUrl.toString().isNotEmpty) {
+      return imageUrl.toString();
     }
-    if (username.isNotEmpty) return username;
+    return null;
+  }
 
-    // email에서 @ 앞부분
-    if (email.contains('@')) return email.split('@')[0];
+  String _senderName(Map<String, dynamic> message) {
+    final sender = message['sender'] ?? message['user'];
+    if (sender is Map) {
+      final firstName = sender['first_name']?.toString() ?? '';
+      if (firstName.isNotEmpty) return firstName;
+
+      final username = sender['username']?.toString() ?? '';
+      final email = sender['email']?.toString() ?? '';
+
+      if (username.contains('@')) {
+        return username.split('@')[0];
+      }
+      if (username.isNotEmpty) return username;
+
+      if (email.contains('@')) return email.split('@')[0];
+      return '알 수 없음';
+    }
+    if (sender != null) return sender.toString();
     return '알 수 없음';
   }
-  if (sender != null) return sender.toString();
-  return '알 수 없음';
-}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: Text(
-          widget.roomName,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: Text(widget.roomName, style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -561,55 +603,89 @@ Future<void> sendMessage() async {
                     itemBuilder: (_, index) {
                       final msg = _messageAsMap(messages[index]);
                       final content = _messageContent(msg);
+                      final imageUrl = _messageImageUrl(msg);
                       final senderName = _senderName(msg);
 
                       final bool isMe =
-                          senderName == _myUsername ||
-                          senderName.toLowerCase() == _myUsername.toLowerCase();
+                          senderName == _myUsername || senderName.toLowerCase() == _myUsername.toLowerCase();
 
                       return Align(
-                        alignment:
-                            isMe
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
+                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                         child: Column(
-                          crossAxisAlignment:
-                              isMe
-                                  ? CrossAxisAlignment.end
-                                  : CrossAxisAlignment.start,
+                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                           children: [
                             Padding(
-                              padding: const EdgeInsets.only(
-                                left: 4,
-                                right: 4,
-                                bottom: 2,
-                              ),
-                              child: Text(
-                                senderName,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey,
-                                ),
-                              ),
+                              padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
+                              child: Text(senderName, style: const TextStyle(fontSize: 11, color: Colors.grey)),
                             ),
                             Container(
                               margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 9,
-                              ),
+                              padding: const EdgeInsets.all(10),
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
                               decoration: BoxDecoration(
-                                color:
-                                    isMe
-                                        ? const Color(0xFFFFEB3B)
-                                        : const Color(0xFFE8ECFF),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                content,
-                                style: const TextStyle(
-                                  color: Colors.black87,
+                                color: isMe ? const Color(0xFFFFEB3B) : Colors.white,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(14),
+                                  topRight: const Radius.circular(14),
+                                  bottomLeft: Radius.circular(isMe ? 14 : 0),
+                                  bottomRight: Radius.circular(isMe ? 0 : 14),
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.04),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (imageUrl != null) ...[
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: ConstrainedBox(
+                                        constraints: const BoxConstraints(maxHeight: 200),
+                                        child: Image.network(
+                                          imageUrl.startsWith('http')
+                                              ? imageUrl
+                                              : 'http://team-it.iptime.org:8000$imageUrl',
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            // 오류 시에는 작은 대체 위젯만 보여준다.
+                                            return const SizedBox(
+                                              height: 40,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.broken_image, color: Colors.grey, size: 20),
+                                                  SizedBox(width: 6),
+                                                  Text('이미지 로드 실패', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                          loadingBuilder: (context, child, loadingProgress) {
+                                            if (loadingProgress == null) return child;
+                                            return Container(
+                                              height: 150,
+                                              color: Colors.grey.shade100,
+                                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    if (content.isNotEmpty) const SizedBox(height: 6),
+                                  ],
+                                  if (content.isNotEmpty)
+                                    Text(
+                                      content,
+                                      style: const TextStyle(color: Colors.black87, fontSize: 14, height: 1.3),
+                                    ),
+                                ],
                               ),
                             ),
                           ],
@@ -624,24 +700,43 @@ Future<void> sendMessage() async {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
               child: Row(
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, color: Color(0xFF7A82F0), size: 28),
+                    onPressed: _isSending ? null : _showImagePickerModal,
+                  ),
                   Expanded(
                     child: TextField(
                       controller: controller,
                       decoration: InputDecoration(
                         hintText: '메시지 입력',
                         filled: true,
-                        fillColor: Colors.grey.shade100,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
                         ),
                       ),
                       onSubmitted: (_) => sendMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
-                    icon: const Icon(Icons.send),
+                  IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF7A82F0),
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: _isSending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send, size: 20),
                     onPressed: _isSending ? null : sendMessage,
                   ),
                 ],
