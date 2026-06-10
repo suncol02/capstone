@@ -24,7 +24,6 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
   ];
 
   List<Map<String, dynamic>> _members = [];
-  // { 'id': 1, 'name': '홍길동', 'selectedTags': [] }
   int _currentMemberIndex = 0;
   bool _isLoading = true;
   bool _isSubmitting = false;
@@ -53,14 +52,10 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         },
       );
 
-      print('상태코드: ${response.statusCode}');
-      print('응답본문: ${response.body}');
-
-
       if (response.statusCode == 200 && mounted) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         final List<dynamic> applicants = decoded is List ? decoded : [];
-        
+
         final owner = widget.project['owner'];
         final ownerId = (owner is Map ? owner['id'] : null)?.toString() ?? '';
         final ownerName = owner is Map
@@ -72,41 +67,24 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         List<Map<String, dynamic>> members = [];
         final Set<String> addedIds = {};
 
-        // owner 추가 (본인 제외)
         addedIds.add(ownerId);
-
-        
-      print('[DEBUG] myUserId: "$myUserId"');
-      print('[DEBUG] ownerId: "$ownerId"');
-      print('[DEBUG] 같은가: ${ownerId == myUserId}');
 
         if (ownerId.isNotEmpty && ownerId != myUserId) {
           members.add({
             'id': int.tryParse(ownerId) ?? 0,
             'name': ownerName,
             'selectedTags': <String>[],
+            'rating': 0,
           });
-        } 
+        }
 
-        // 수락된 팀원 추가 (본인 제외)
         for (var app in applicants) {
-          if (app['status'] != 'accepted' &&
-              app['status'] != 'joined') {
-            continue;
-          }
+          if (app['status'] != 'accepted' && app['status'] != 'joined') continue;
 
           final user = app['user'];
+          final memberId = (user?['id'] ?? app['user_id'] ?? app['id']).toString();
 
-          final memberId = (
-            user?['id'] ??
-            app['user_id'] ??
-            app['id']
-          ).toString();
-
-          // 본인 제외
           if (memberId == myUserId) continue;
-
-          // 중복 제거
           if (addedIds.contains(memberId)) continue;
 
           addedIds.add(memberId);
@@ -124,31 +102,21 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
             'id': int.tryParse(memberId) ?? 0,
             'name': memberName.toString(),
             'selectedTags': <String>[],
+            'rating': 0,
           });
         }
-
-        print('===== 평가 대상 =====');
-        for (var m in members) {
-          print('${m['id']} / ${m['name']}');
-        }
-                
 
         setState(() {
           _members = members;
           _isLoading = false;
         });
       } else {
-          print('[DEBUG] applicants 실패: ${response.statusCode}');
-          print('[DEBUG] 응답 내용: ${response.body}');
-          if (mounted) setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
       }
     } catch (e) {
-      print('[DEBUG] 멤버 로드 실패: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  
 
   Future<void> _checkAlreadySubmitted() async {
     final prefs = await SharedPreferences.getInstance();
@@ -203,7 +171,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
   }
 
   bool get _allMembersEvaluated {
-    return _members.every((m) => (m['selectedTags'] as List).isNotEmpty);
+    return _members.every((m) => (m['rating'] as int) > 0);
   }
 
   Future<void> _submitEvaluations() async {
@@ -219,6 +187,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
       final evaluations = _members.map((m) => {
         'target_id': m['id'],
         'tags': m['selectedTags'],
+        'rating': m['rating'],
       }).toList();
 
       final response = await http.post(
@@ -230,19 +199,13 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
         body: jsonEncode({'evaluations': evaluations}),
       );
 
-      print('[DEBUG] evaluate 상태코드: ${response.statusCode}');  
-      print('[DEBUG] evaluate 응답: ${response.body}');            
-
       if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
-        print('[DEBUG] 평가 응답: $data');
         final allSubmitted = data['all_members_submitted'] ?? false;
-        print('[DEBUG] allSubmitted 값: $allSubmitted');
 
         if (allSubmitted) {
-          print('[DEBUG] _saveToArchive 호출 시작');
           await _saveToArchive(token, projectId);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -255,7 +218,6 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
             MaterialPageRoute(builder: (context) => const MainScreen()),
             (route) => false,
           );
-
         } else {
           final submitted = data['submitted_members_count'] ?? 0;
           final required = data['required_members_count'] ?? 0;
@@ -281,23 +243,29 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
   }
 
   Future<void> _saveToArchive(String token, dynamic projectId) async {
-  try {
-    final archiveRes = await http.post(
-      Uri.parse('$API_BASE_URL/archives/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Token $token',
-      },
-      body: jsonEncode({
-        'project': projectId,
-        'result': '완료',
-      }),
-    );
-    print('[DEBUG] archive POST 응답: ${archiveRes.statusCode} / ${archiveRes.body}');
-  } catch (e) {
-    print('[DEBUG] 아카이브 저장 실패: $e');
+    try {
+      final avgRating = _members.isEmpty
+          ? 0.0
+          : _members.map((m) => m['rating'] as int).reduce((a, b) => a + b) /
+              _members.length;
+
+      final archiveRes = await http.post(
+        Uri.parse('$API_BASE_URL/archives/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Token $token',
+        },
+        body: jsonEncode({
+          'project': projectId,
+          'result': '완료',
+          'rating': avgRating,
+        }),
+      );
+      print('[DEBUG] archive POST 응답: ${archiveRes.statusCode} / ${archiveRes.body}');
+    } catch (e) {
+      print('[DEBUG] 아카이브 저장 실패: $e');
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -327,46 +295,47 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _hasSubmitted
-          ? _buildAlreadySubmitted()
-          : _members.isEmpty
-          ? const Center(child: Text('평가할 팀원이 없습니다.'))
-          : _buildEvaluationBody(),
+              ? _buildAlreadySubmitted()
+              : _members.isEmpty
+                  ? const Center(child: Text('평가할 팀원이 없습니다.'))
+                  : _buildEvaluationBody(),
     );
   }
 
   Widget _buildAlreadySubmitted() {
-  return WillPopScope(
-    onWillPop: () async {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const MainScreen()),
-        (route) => false,
-      );
-      return false;
-    },
-    child: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.check_circle_outline, size: 64, color: Color(0xFF9B98EB)),
-          const SizedBox(height: 16),
-          const Text(
-            '이미 평가를 완료했습니다.',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '다른 팀원들의 평가를 기다리는 중입니다.',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-          ),
-        ],
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+          (route) => false,
+        );
+        return false;
+      },
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle_outline, size: 64, color: Color(0xFF9B98EB)),
+            const SizedBox(height: 16),
+            const Text(
+              '이미 평가를 완료했습니다.',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '다른 팀원들의 평가를 기다리는 중입니다.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildEvaluationBody() {
     final member = _members[_currentMemberIndex];
     final selectedTags = member['selectedTags'] as List<String>;
+    final int currentRating = member['rating'] as int;
     final isLast = _currentMemberIndex == _members.length - 1;
 
     return Padding(
@@ -374,20 +343,22 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 진행 상황
           Row(
-            children: List.generate(_members.length, (i) => Expanded(
-              child: Container(
-                height: 4,
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                decoration: BoxDecoration(
-                  color: i <= _currentMemberIndex
-                      ? const Color(0xFF9B98EB)
-                      : Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+            children: List.generate(
+              _members.length,
+              (i) => Expanded(
+                child: Container(
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: i <= _currentMemberIndex
+                        ? const Color(0xFF9B98EB)
+                        : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            )),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -396,7 +367,6 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
           ),
           const SizedBox(height: 24),
 
-          // 멤버 이름
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -428,12 +398,48 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
                   '이 팀원을 어떻게 평가하시나요?',
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    final starIndex = index + 1;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          member['rating'] = starIndex;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: Icon(
+                          starIndex <= currentRating ? Icons.star : Icons.star_border,
+                          color: starIndex <= currentRating
+                              ? const Color(0xFFFFBF00)
+                              : Colors.grey.shade400,
+                          size: 40,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  currentRating == 0
+                      ? '별점을 선택해주세요'
+                      : ['', '별로예요', '아쉬워요', '보통이에요', '좋아요', '최고예요'][currentRating],
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: currentRating == 0
+                        ? Colors.grey.shade400
+                        : const Color(0xFF9B98EB),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // 태그 선택
           Expanded(
             child: ListView.builder(
               itemCount: _availableTags.length,
@@ -461,9 +467,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
                     onChanged: (bool? value) {
                       setState(() {
                         selectedTags.clear();
-                        if (value == true) {
-                          selectedTags.add(tagString);
-                        }
+                        if (value == true) selectedTags.add(tagString);
                       });
                     },
                   ),
@@ -473,7 +477,6 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
           ),
           const SizedBox(height: 16),
 
-          // 버튼
           Row(
             children: [
               if (_currentMemberIndex > 0)
@@ -483,7 +486,8 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       side: const BorderSide(color: Color(0xFF9B98EB)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                     child: const Text('이전', style: TextStyle(color: Color(0xFF9B98EB))),
                   ),
@@ -492,7 +496,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
               Expanded(
                 flex: 2,
                 child: ElevatedButton(
-                  onPressed: selectedTags.isEmpty
+                  onPressed: currentRating == 0
                       ? null
                       : isLast
                           ? (_allMembersEvaluated ? _submitEvaluations : null)
@@ -502,13 +506,22 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
                     disabledBackgroundColor: Colors.grey.shade400,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                   child: _isSubmitting
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
                       : Text(
                           isLast ? '평가 제출하기' : '다음',
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600),
                         ),
                 ),
               ),

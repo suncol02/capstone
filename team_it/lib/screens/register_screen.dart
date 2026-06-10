@@ -12,14 +12,17 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // 프로젝트 성향 옵션
-  final List<String> personalities = ['외향적(E)', '내향적(I)', '계획적(J)', '즉흥적(P)'];
+  // 프로젝트 성향 옵션 수정
+  final List<String> personalities = ['리더형', '실무형', '기획형', '발표형'];
   String? selectedPersonality;
+
+  // 학과(단과대) 옵션 추가
+  final List<String> departments = ['공과대학', '자연과학대학', '경영대학', '인문대학'];
+  String? selectedDepartment;
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController departmentController = TextEditingController();
 
   bool _isLoading = false;
 
@@ -28,7 +31,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     emailController.dispose();
     passwordController.dispose();
     nameController.dispose();
-    departmentController.dispose();
     super.dispose();
   }
 
@@ -36,9 +38,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
     final name = nameController.text.trim();
-    final department = departmentController.text.trim();
 
-    if (email.isEmpty || password.isEmpty || name.isEmpty || department.isEmpty || selectedPersonality == null) {
+    // 입력 및 선택 검증 조건 수정
+    if (email.isEmpty || 
+        password.isEmpty || 
+        name.isEmpty || 
+        selectedDepartment == null || 
+        selectedPersonality == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('모든 항목을 입력해주세요.')));
       }
@@ -55,7 +61,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'email': email,
           'password': password,
           'name': name,
-          'department': department,
+          'department': selectedDepartment, 
           'personality_type': selectedPersonality,
         }),
       );
@@ -118,21 +124,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 16),
 
-            //비밀번호
+            // 비밀번호
             HoverPasswordField(label: '비밀번호', controller: passwordController),
-
             const SizedBox(height: 16),
 
-            // 학과
-            TextField(
-              controller: departmentController,
+            // 학과 (Dropdown 입력으로 변경)
+            DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: '학과', border: OutlineInputBorder()),
+              value: selectedDepartment,
+              items: departments.map((String value) {
+                return DropdownMenuItem<String>(value: value, child: Text(value));
+              }).toList(),
+              onChanged: (val) => setState(() => selectedDepartment = val),
             ),
             const SizedBox(height: 16),
 
-            // 프로젝트 성향 선택
+            // 프로젝트 성향 선택 (옵션 리스트 변경 반영)
             DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: '프로젝트 성향', border: OutlineInputBorder()),
+              value: selectedPersonality,
               items: personalities.map((String value) {
                 return DropdownMenuItem<String>(value: value, child: Text(value));
               }).toList(),

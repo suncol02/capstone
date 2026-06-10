@@ -57,6 +57,83 @@ class _MainScreenState extends State<MainScreen> {
     _projectListKey.currentState?._loadProjects();
   }
 
+  void _openRandomMatching() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Icon(Icons.shuffle_rounded, size: 48, color: Color(0xFF8E8CF1)),
+            const SizedBox(height: 16),
+            const Text(
+              '랜덤 매칭',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '조건에 맞는 프로젝트를 랜덤으로 추천해드립니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  final projects =
+                      _projectListKey.currentState?._visibleProjects() ?? [];
+                  if (projects.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('추천할 프로젝트가 없습니다.')),
+                    );
+                    return;
+                  }
+                  final random = (projects..shuffle()).first;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ProjectDetailScreen(project: random),
+                    ),
+                  ).then((_) => _refreshProjectList());
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8E8CF1),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  '랜덤 추천 받기',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,17 +190,33 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) =>
-                      CreateProjectModal(onProjectCreated: _refreshProjectList),
-                );
-              },
-              backgroundColor: const Color(0xFF8E8CF1),
-              shape: const CircleBorder(),
-              child: const Icon(Icons.add, color: Colors.white, size: 34),
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'random_match',
+                  onPressed: _openRandomMatching,
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF8E8CF1),
+                  shape: const CircleBorder(),
+                  elevation: 4,
+                  child: const Icon(Icons.shuffle_rounded, size: 22),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'create_project',
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) =>
+                          CreateProjectModal(onProjectCreated: _refreshProjectList),
+                    );
+                  },
+                  backgroundColor: const Color(0xFF8E8CF1),
+                  shape: const CircleBorder(),
+                  child: const Icon(Icons.add, color: Colors.white, size: 34),
+                ),
+              ],
             )
           : null,
     );
