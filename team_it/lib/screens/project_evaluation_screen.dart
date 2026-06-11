@@ -187,7 +187,7 @@ class _ProjectEvaluationScreenState extends State<ProjectEvaluationScreen> {
       final evaluations = _members.map((m) => {
         'target_id': m['id'],
         'tags': m['selectedTags'],
-        'rating': m['rating'],
+        'score': m['rating'],
       }).toList();
 
       final response = await http.post(
